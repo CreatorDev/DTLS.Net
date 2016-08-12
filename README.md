@@ -22,7 +22,7 @@ Since the client is only required to serve for the above project it has several 
 2. No support for fragmentation of handshake packets  
 3. Does not verify Server Certificates (against CA)  
 
-The server currently has following limitations  
+The server currently also has the following limitations:  
 
 1. Does not verify client Certificates  
 2. No support for fragmentation of handshake packets  
