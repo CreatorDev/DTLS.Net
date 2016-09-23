@@ -128,8 +128,17 @@ namespace DTLS
             byte[] data;
             if (_EncyptedServerEpoch.HasValue && (_EncyptedServerEpoch.Value == record.Epoch))
             {
-                while (_Cipher == null)
+
+                int count = 0;
+                while ((_Cipher == null) && (count < 50))
+                {
                     System.Threading.Thread.Sleep(10);
+                    count++;
+                }
+
+                if (_Cipher == null)
+                    throw new Exception();
+
 
                 if (_Cipher != null)
                 {

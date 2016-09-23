@@ -71,8 +71,17 @@ namespace DTLS
             byte[] data;
             if ((session != null) && session.IsEncypted(record))
             {
-                while (session.Cipher == null)
+                int count = 0;
+                while ((session.Cipher == null) && (count < 50))
+                {
                     System.Threading.Thread.Sleep(10);
+                    count++;
+                }
+
+                if (session.Cipher == null)
+                {                    
+                    throw new Exception();
+                }
 
                 if (session.Cipher != null)
                 {

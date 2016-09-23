@@ -362,6 +362,7 @@ namespace DTLS
             catch
             {
 #endif
+                SendAlert(session, address, TAlertLevel.Fatal, TAlertDescription.InternalError);
             }
         }
 
