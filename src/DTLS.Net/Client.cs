@@ -12,11 +12,11 @@
         products derived from this software without specific prior written permission.
 
  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES,
- INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE 
- DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, 
+ INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
- SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, 
- WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE 
+ SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ***********************************************************************************************************************/
 
@@ -42,7 +42,7 @@ namespace DTLS
         private static Version SupportedVersion = DTLSRecord.Version1_2;
 
         private EndPoint _LocalEndPoint;
-        private int _MaxPacketSize = 1440; 
+        private int _MaxPacketSize = 1440;
         private Socket _Socket;
         private List<TCipherSuite> _SupportedCipherSuites;
 
@@ -130,7 +130,7 @@ namespace DTLS
             {
 
                 int count = 0;
-                while ((_Cipher == null) && (count < 50))
+                while ((_Cipher == null) && (count < 500))
                 {
                     System.Threading.Thread.Sleep(10);
                     count++;
@@ -616,7 +616,7 @@ namespace DTLS
 
             clientHello.Extensions.Add(new Extension() {  ExtensionType = TExtensionType.EncryptThenMAC});
             clientHello.Extensions.Add(new Extension() { ExtensionType = TExtensionType.ExtendedMasterSecret });
-            
+
             EllipticCurvesExtension ellipticCurvesExtension = new EllipticCurvesExtension();
             for (int curve = 0; curve < (int)TEllipticCurve.secp521r1; curve++)
             {
@@ -769,7 +769,7 @@ namespace DTLS
             socket.ReceiveFromAsync(parameters);
         }
 
-        public void SetVersion(Version version) 
+        public void SetVersion(Version version)
         {
             _Version = version;
         }

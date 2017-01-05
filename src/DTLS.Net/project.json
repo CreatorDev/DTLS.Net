@@ -1,7 +1,7 @@
 ﻿{
-  "version": "1.0.19-*",
+  "version": "1.0.21-*",
   "title": "DTLS.Net",
-  "description": "DTLS.Net Class Library", 
+  "description": "DTLS.Net Class Library",
   "authors": [ "Delme Thomas" ],
   "packOptions": {
     "owners": [ "Imagination Technologies Limited" ],
