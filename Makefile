@@ -1,4 +1,4 @@
-DTLS_VERSION:=1.0.19
+DTLS_VERSION:=1.0.21
 
 .PHONY: all
 all: src/DTLS.Net/bin/Release/DTLS.Net.$(DTLS_VERSION).nupkg

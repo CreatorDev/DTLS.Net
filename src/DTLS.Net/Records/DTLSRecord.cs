@@ -4,19 +4,19 @@
 
  Redistribution and use in source and binary forms, with or without modification, are permitted provided that the
  following conditions are met:
-     1. Redistributions of source code must retain the above copyright notice, this list of conditions and the
-        following disclaimer.
-     2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the
-        following disclaimer in the documentation and/or other materials provided with the distribution.
-     3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote
-        products derived from this software without specific prior written permission.
+	 1. Redistributions of source code must retain the above copyright notice, this list of conditions and the
+		following disclaimer.
+	 2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the
+		following disclaimer in the documentation and/or other materials provided with the distribution.
+	 3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote
+		products derived from this software without specific prior written permission.
 
  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES,
- INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE 
- DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, 
+ INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
- SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, 
- WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE 
+ SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ***********************************************************************************************************************/
 
@@ -36,8 +36,8 @@ namespace DTLS
 	internal class DTLSRecord
 	{
 		public static Version DefaultVersion = new Version(1, 0);
-        public static Version Version1_0 = new Version(1, 0);
-        public static Version Version1_2 = new Version(1, 2);
+		public static Version Version1_0 = new Version(1, 0);
+		public static Version Version1_2 = new Version(1, 2);
 
 		public const int RECORD_OVERHEAD = 13;
 
@@ -58,7 +58,7 @@ namespace DTLS
 		 //  opaque fragment[DTLSPlaintext.length];
 		 //} DTLSPlaintext;
 
-		public TRecordType RecordType 
+		public TRecordType RecordType
 		{
 			get { return _RecordType; }
 			set { _RecordType = value; }
@@ -85,7 +85,7 @@ namespace DTLS
 		public byte[] Fragment
 		{
 			get { return _Fragment; }
-			set 
+			set
 			{
 				_Fragment = value;
 				if (_Fragment != null)
@@ -108,6 +108,7 @@ namespace DTLS
 		{
 			DTLSRecord result = new DTLSRecord();
 			result._RecordType = (TRecordType)stream.ReadByte();
+			// could check here for a valid type, and bail out if invalid
 			result._Version = new Version(255 - stream.ReadByte(), 255 - stream.ReadByte());
 			result._Epoch = NetworkByteOrderConverter.ToUInt16(stream);
 			result._SequenceNumber = NetworkByteOrderConverter.ToInt48(stream);
@@ -116,10 +117,18 @@ namespace DTLS
 			{
 				result._Fragment = new byte[result._Length];
 				int length = stream.Read(result._Fragment, 0, result._Length);
-                while (length < result._Length)
-                {
-                    length += stream.Read(result._Fragment, length, result._Length - length);
-                }
+				while (length < result._Length)
+				{
+					int bytesRead = stream.Read(result._Fragment, length, result._Length - length);
+					if (bytesRead > 0)
+					{
+						length += bytesRead;
+					}
+					else
+					{
+						break;
+					}
+				}
 			}
 			return result;
 		}
