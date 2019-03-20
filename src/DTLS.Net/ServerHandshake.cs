@@ -44,6 +44,8 @@ namespace DTLS
 		public Org.BouncyCastle.Crypto.AsymmetricKeyParameter PrivateKey { get; set; }
 		public Version ServerVersion { get; set; }
 		public Sessions Sessions { get; set; }
+		private const int HANDSHAKE_DWELL_TIME = 10;
+		public static int HandshakeTimeout { get; set; } = 5000;
 
 
 
@@ -72,15 +74,15 @@ namespace DTLS
             if ((session != null) && session.IsEncypted(record))
             {
                 int count = 0;
-                while ((session.Cipher == null) && (count < 50))
+                while ((session.Cipher == null) && (count < (HandshakeTimeout / HANDSHAKE_DWELL_TIME)))
                 {
-                    System.Threading.Thread.Sleep(10);
+                    System.Threading.Thread.Sleep(HANDSHAKE_DWELL_TIME);
                     count++;
                 }
 
                 if (session.Cipher == null)
-                {                    
-                    throw new Exception();
+                {
+                    throw new Exception($"HandshakeTimeout: >{HandshakeTimeout}");
                 }
 
                 if (session.Cipher != null)
