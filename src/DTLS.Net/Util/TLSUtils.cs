@@ -171,7 +171,7 @@ namespace DTLS
                     break;
             }
             DTLSContext context = new DTLSContext(client, version, handshakeInfo);
-            Org.BouncyCastle.Crypto.Prng.CryptoApiRandomGenerator randomGenerator = new Org.BouncyCastle.Crypto.Prng.CryptoApiRandomGenerator();
+            Net.Util.DTLSCryptoApiRandomGenerator randomGenerator = new Net.Util.DTLSCryptoApiRandomGenerator();
             context.SecureRandom = new Org.BouncyCastle.Security.SecureRandom(randomGenerator);
 
             signer.Init(context);

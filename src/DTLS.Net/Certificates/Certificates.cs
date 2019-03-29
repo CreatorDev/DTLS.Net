@@ -156,7 +156,7 @@ namespace DTLS
             if (privateKey != null)
             {
 
-                CryptoApiRandomGenerator randomGenerator = new CryptoApiRandomGenerator();
+                Net.Util.DTLSCryptoApiRandomGenerator randomGenerator = new Net.Util.DTLSCryptoApiRandomGenerator();
                 SecureRandom random = new SecureRandom(randomGenerator);
                 X509V3CertificateGenerator certificateGenerator = new X509V3CertificateGenerator();
                 AddStandardCertificateInfo(certificateGenerator, random, subject, issuer.Subject, startDate, expiryDate);
@@ -193,7 +193,7 @@ namespace DTLS
             AsymmetricKeyParameter privateKey = issuer.PrivateKey as AsymmetricKeyParameter;
             if (privateKey != null)
             {
-                CryptoApiRandomGenerator randomGenerator = new CryptoApiRandomGenerator();
+                Net.Util.DTLSCryptoApiRandomGenerator randomGenerator = new Net.Util.DTLSCryptoApiRandomGenerator();
                 SecureRandom random = new SecureRandom(randomGenerator);
                 X509V3CertificateGenerator certificateGenerator = new X509V3CertificateGenerator();
                 AddStandardCertificateInfo(certificateGenerator, random, subject, issuer.Subject, startDate, expiryDate);
@@ -220,7 +220,7 @@ namespace DTLS
         {
             byte[] result = null;
 
-            CryptoApiRandomGenerator randomGenerator = new CryptoApiRandomGenerator();
+            Net.Util.DTLSCryptoApiRandomGenerator randomGenerator = new Net.Util.DTLSCryptoApiRandomGenerator();
             SecureRandom random = new SecureRandom(randomGenerator);
             X509V3CertificateGenerator certificateGenerator = new X509V3CertificateGenerator();
             AddStandardCertificateInfo(certificateGenerator, random, subject, subject, startDate, expiryDate);
