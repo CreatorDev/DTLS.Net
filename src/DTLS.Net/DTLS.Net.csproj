@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>DTLS.Net Class Library</Description>
+    <AssemblyTitle>DTLS.Net</AssemblyTitle>
+    <VersionPrefix>1.0.21</VersionPrefix>
+    <Authors>Delme Thomas</Authors>
+    <TargetFramework>net451</TargetFramework>
+    <AssemblyName>DTLS.Net</AssemblyName>
+    <PackageId>DTLS.Net</PackageId>
+    <PackageProjectUrl>https://github.com/CreatorDev/DTLS.Net</PackageProjectUrl>
+    <PackageLicenseUrl>https://github.com/CreatorDev/DTLS.Net/blob/master/LICENSE</PackageLicenseUrl>
+    <PackageTargetFallback>$(PackageTargetFallback);netstandard1.5</PackageTargetFallback>
+    <GenerateAssemblyTitleAttribute>false</GenerateAssemblyTitleAttribute>
+    <GenerateAssemblyDescriptionAttribute>false</GenerateAssemblyDescriptionAttribute>
+    <GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
+    <GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
+    <GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
+    <GenerateAssemblyCopyrightAttribute>false</GenerateAssemblyCopyrightAttribute>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BouncyCastle" Version="1.8.1" />
+  </ItemGroup>
+
+  <ItemGroup Condition=" '$(TargetFramework)' == 'net451' ">
+    <Reference Include="System.Numerics" />
+    <Reference Include="System.Xml" />
+    <Reference Include="System" />
+    <Reference Include="Microsoft.CSharp" />
+  </ItemGroup>
+
+</Project>

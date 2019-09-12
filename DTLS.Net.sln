@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 14
-VisualStudioVersion = 14.0.25123.0
+# Visual Studio 15
+VisualStudioVersion = 15.0.28307.779
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{F03FE972-A21E-403E-B93F-28CA681083E3}"
 EndProject
@@ -10,13 +10,13 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		global.json = global.json
 	EndProjectSection
 EndProject
-Project("{8BB2217D-0F2D-49D1-97BC-3654ED321F3B}") = "DTLS.Net", "src\DTLS.Net\DTLS.Net.xproj", "{6D15ED53-D821-4909-8318-859D1F98F1DA}"
-EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "test", "test", "{296FC660-E501-4920-8F34-ADB6B9BCE099}"
 EndProject
-Project("{8BB2217D-0F2D-49D1-97BC-3654ED321F3B}") = "TestServer", "test\TestServer\TestServer.xproj", "{A5380CE2-6DA3-44D2-B495-AF167CEF7520}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DTLS.Net", "src\DTLS.Net\DTLS.Net.csproj", "{6D15ED53-D821-4909-8318-859D1F98F1DA}"
 EndProject
-Project("{8BB2217D-0F2D-49D1-97BC-3654ED321F3B}") = "TestClient", "test\TestClient\TestClient.xproj", "{EF71B497-E9D0-41D1-AEED-49F5532A4524}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TestServer", "test\TestServer\TestServer.csproj", "{A5380CE2-6DA3-44D2-B495-AF167CEF7520}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TestClient", "test\TestClient\TestClient.csproj", "{EF71B497-E9D0-41D1-AEED-49F5532A4524}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -44,5 +44,8 @@ Global
 		{6D15ED53-D821-4909-8318-859D1F98F1DA} = {F03FE972-A21E-403E-B93F-28CA681083E3}
 		{A5380CE2-6DA3-44D2-B495-AF167CEF7520} = {296FC660-E501-4920-8F34-ADB6B9BCE099}
 		{EF71B497-E9D0-41D1-AEED-49F5532A4524} = {296FC660-E501-4920-8F34-ADB6B9BCE099}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {100466F8-EBF7-45AE-8446-74F2B349DB21}
 	EndGlobalSection
 EndGlobal
