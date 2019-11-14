@@ -21,65 +21,70 @@
 ***********************************************************************************************************************/
 
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+using System.IO;
 
 namespace DTLS
 {
-      //struct {
-      //    select (KeyExchangeAlgorithm) {
-      //        /* other cases for rsa, diffie_hellman, etc. */
-      //        case psk:   /* NEW */
-      //            opaque psk_identity<0..2^16-1>;
-      //    } exchange_keys;
-      //} ClientKeyExchange;
-	internal class PSKClientKeyExchange : IHandshakeMessage
+    //struct {
+    //    select (KeyExchangeAlgorithm) {
+    //        /* other cases for rsa, diffie_hellman, etc. */
+    //        case psk:   /* NEW */
+    //            opaque psk_identity<0..2^16-1>;
+    //    } exchange_keys;
+    //} ClientKeyExchange;
+    internal class PSKClientKeyExchange : IHandshakeMessage
 	{
-        private byte[] _PSKIdentity;
-		
-		public THandshakeType MessageType
+        public THandshakeType MessageType => THandshakeType.ClientKeyExchange;
+
+        public byte[] PSKIdentity { get; set; }
+
+        public int CalculateSize(Version version)
 		{
-			get { return THandshakeType.ClientKeyExchange; }
-		}
+            var result = 2;
+            if (this.PSKIdentity != null)
+            {
+                result += this.PSKIdentity.Length;
+            }
 
-        public byte[] PSKIdentity
-        {
-            get { return _PSKIdentity; }
-            set { _PSKIdentity = value; }
-        }
-
-
-		public int CalculateSize(Version version)
-		{
-            int result = 2;
-            if (_PSKIdentity != null)
-                result += _PSKIdentity.Length;
             return result;
 		}
 
-		public void Serialise(System.IO.Stream stream, Version version)
+		public void Serialise(Stream stream, Version version)
 		{
-            if (_PSKIdentity == null)
+            if (stream == null)
+            {
+                throw new ArgumentNullException(nameof(stream));
+            }
+
+            if (this.PSKIdentity == null)
+            {
                 NetworkByteOrderConverter.WriteUInt16(stream, 0);
+            }
             else
             {
-                NetworkByteOrderConverter.WriteUInt16(stream, (ushort)_PSKIdentity.Length);
-                stream.Write(_PSKIdentity, 0, _PSKIdentity.Length);
+                NetworkByteOrderConverter.WriteUInt16(stream, (ushort)this.PSKIdentity.Length);
+                stream.Write(this.PSKIdentity, 0, this.PSKIdentity.Length);
             }
 		}
 
-        public static PSKClientKeyExchange Deserialise(System.IO.Stream stream)
+        public static PSKClientKeyExchange Deserialise(Stream stream)
 		{
+            if (stream == null)
+            {
+                throw new ArgumentNullException(nameof(stream));
+            }
+
             PSKClientKeyExchange result = null;
-            ushort pskIdentityLength = NetworkByteOrderConverter.ToUInt16(stream);
+            var pskIdentityLength = NetworkByteOrderConverter.ToUInt16(stream);
             if (pskIdentityLength > 0)
             {
-                result = new PSKClientKeyExchange();
-                result._PSKIdentity = new byte[pskIdentityLength];
-                stream.Read(result._PSKIdentity, 0, pskIdentityLength);
+                result = new PSKClientKeyExchange
+                {
+                    PSKIdentity = new byte[pskIdentityLength]
+                };
+                stream.Read(result.PSKIdentity, 0, pskIdentityLength);
             }
-			return result;			
+			return result;
 		}
 	}
 }

@@ -20,14 +20,13 @@
  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ***********************************************************************************************************************/
 
+using Org.BouncyCastle.Crypto;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 
 namespace DTLS
 {
-	internal class CipherSuites
+    internal class CipherSuites
 	{
         private class CipherSuite
         {
@@ -38,96 +37,113 @@ namespace DTLS
             public Version MinVersion { get; set; }
             public TPseudorandomFunction PRF { get; set; }
 
-            public CipherSuite(TCipherSuite cipherSuite, TKeyExchangeAlgorithm keyExchangeAlgorithm, TSignatureAlgorithm signatureAlgorithm, Version minVersion,TPseudorandomFunction prf)
+            public CipherSuite(TCipherSuite cipherSuite, TKeyExchangeAlgorithm keyExchangeAlgorithm, 
+                TSignatureAlgorithm signatureAlgorithm, Version minVersion,TPseudorandomFunction prf)
             {
-                Suite = cipherSuite;
-                KeyExchangeAlgorithm = keyExchangeAlgorithm;
-                SignatureAlgorithm = signatureAlgorithm;
-                MinVersion = minVersion;
-                PRF = prf;
+                this.Suite = cipherSuite;
+                this.KeyExchangeAlgorithm = keyExchangeAlgorithm;
+                this.SignatureAlgorithm = signatureAlgorithm;
+                this.MinVersion = minVersion ?? throw new ArgumentNullException(nameof(minVersion));
+                this.PRF = prf;
             }
         }
 
         private static Dictionary<TCipherSuite, CipherSuite> _CipherSuites;
 
-        static CipherSuites()
-        {
-            _CipherSuites = new Dictionary<TCipherSuite, CipherSuite>();
-            _CipherSuites.Add(TCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8, new CipherSuite(TCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8, TKeyExchangeAlgorithm.ECDHE_ECDSA, TSignatureAlgorithm.ECDSA, DTLSRecord.Version1_2, TPseudorandomFunction.SHA256));
-            _CipherSuites.Add(TCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256, new CipherSuite(TCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256, TKeyExchangeAlgorithm.ECDHE_ECDSA, TSignatureAlgorithm.ECDSA, DTLSRecord.Version1_0, TPseudorandomFunction.SHA256));
-            _CipherSuites.Add(TCipherSuite.TLS_PSK_WITH_AES_128_CCM_8, new CipherSuite(TCipherSuite.TLS_PSK_WITH_AES_128_CCM_8, TKeyExchangeAlgorithm.PSK, TSignatureAlgorithm.Anonymous, DTLSRecord.Version1_2, TPseudorandomFunction.SHA256));
-            _CipherSuites.Add(TCipherSuite.TLS_PSK_WITH_AES_128_CBC_SHA256, new CipherSuite(TCipherSuite.TLS_PSK_WITH_AES_128_CBC_SHA256, TKeyExchangeAlgorithm.PSK, TSignatureAlgorithm.Anonymous, DTLSRecord.Version1_0, TPseudorandomFunction.SHA256));
-            _CipherSuites.Add(TCipherSuite.TLS_ECDHE_PSK_WITH_AES_128_CBC_SHA256, new CipherSuite(TCipherSuite.TLS_ECDHE_PSK_WITH_AES_128_CBC_SHA256, TKeyExchangeAlgorithm.ECDHE_PSK, TSignatureAlgorithm.Anonymous, DTLSRecord.Version1_0, TPseudorandomFunction.SHA256));
-        }
-
-
-		public static TKeyExchangeAlgorithm GetKeyExchangeAlgorithm(TCipherSuite cipherSuite)
-		{
-			TKeyExchangeAlgorithm result = TKeyExchangeAlgorithm.NotSet;
-            CipherSuite suite;
-            if (_CipherSuites.TryGetValue(cipherSuite, out suite))
+        static CipherSuites() => 
+            _CipherSuites = new Dictionary<TCipherSuite, CipherSuite>
             {
-                result = suite.KeyExchangeAlgorithm;
+                { TCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8, new CipherSuite(TCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8, TKeyExchangeAlgorithm.ECDHE_ECDSA, TSignatureAlgorithm.ECDSA, DTLSRecord.Version1_2, TPseudorandomFunction.SHA256) },
+                { TCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256, new CipherSuite(TCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256, TKeyExchangeAlgorithm.ECDHE_ECDSA, TSignatureAlgorithm.ECDSA, DTLSRecord.Version1_0, TPseudorandomFunction.SHA256) },
+                { TCipherSuite.TLS_PSK_WITH_AES_128_CCM_8, new CipherSuite(TCipherSuite.TLS_PSK_WITH_AES_128_CCM_8, TKeyExchangeAlgorithm.PSK, TSignatureAlgorithm.Anonymous, DTLSRecord.Version1_2, TPseudorandomFunction.SHA256) },
+                { TCipherSuite.TLS_PSK_WITH_AES_128_CBC_SHA256, new CipherSuite(TCipherSuite.TLS_PSK_WITH_AES_128_CBC_SHA256, TKeyExchangeAlgorithm.PSK, TSignatureAlgorithm.Anonymous, DTLSRecord.Version1_0, TPseudorandomFunction.SHA256) },
+                { TCipherSuite.TLS_ECDHE_PSK_WITH_AES_128_CBC_SHA256, new CipherSuite(TCipherSuite.TLS_ECDHE_PSK_WITH_AES_128_CBC_SHA256, TKeyExchangeAlgorithm.ECDHE_PSK, TSignatureAlgorithm.Anonymous, DTLSRecord.Version1_0, TPseudorandomFunction.SHA256) },
+                { TCipherSuite.TLS_RSA_WITH_AES_256_CBC_SHA, new CipherSuite(TCipherSuite.TLS_RSA_WITH_AES_256_CBC_SHA, TKeyExchangeAlgorithm.RSA, TSignatureAlgorithm.Anonymous, DTLSRecord.Version1_0, TPseudorandomFunction.SHA256) }
+            };
+
+
+        public static TKeyExchangeAlgorithm GetKeyExchangeAlgorithm(TCipherSuite cipherSuite)
+		{
+            if (_CipherSuites.TryGetValue(cipherSuite, out var suite))
+            {
+                return suite.KeyExchangeAlgorithm;
             }
-			return result;
+
+            return TKeyExchangeAlgorithm.NotSet;
 		}
 
         public static TPseudorandomFunction GetPseudorandomFunction(Version version, TCipherSuite cipherSuite)
         {
-            TPseudorandomFunction result = TPseudorandomFunction.Legacy;
-            if (version >= DTLSRecord.Version1_2)
+            if(version == null)
             {
-                CipherSuite suite;
-                if (_CipherSuites.TryGetValue(cipherSuite, out suite))
-                {
-                    result = suite.PRF;
-                }
+                throw new ArgumentNullException(nameof(version));
             }
-            return result;
+
+            if(version < DTLSRecord.Version1_2)
+            {
+                return TPseudorandomFunction.Legacy;
+            }
+
+            if (_CipherSuites.TryGetValue(cipherSuite, out var suite))
+            {
+                return suite.PRF;
+            }
+
+            throw new Exception($"Pseudorandom Function {cipherSuite} not found");
         }
 
 		public static TSignatureAlgorithm GetSignatureAlgorithm(TCipherSuite cipherSuite)
 		{
-			TSignatureAlgorithm result = TSignatureAlgorithm.Anonymous;
-            CipherSuite suite;
-            if (_CipherSuites.TryGetValue(cipherSuite, out suite))
+            if (_CipherSuites.TryGetValue(cipherSuite, out var suite))
             {
-                result = suite.SignatureAlgorithm;
+                return suite.SignatureAlgorithm;
             }
-			return result;
+
+            return TSignatureAlgorithm.Anonymous;
 		}
 
-        public static bool SuiteUsable(TCipherSuite cipherSuite, Org.BouncyCastle.Crypto.AsymmetricKeyParameter privateKey, PSKIdentities pskIdentities, bool haveValidatePSKCallback)
+        public static bool SuiteUsable(TCipherSuite cipherSuite, AsymmetricKeyParameter privateKey, PSKIdentities pskIdentities, bool haveValidatePSKCallback)
         {
-            bool result = false;
-            TKeyExchangeAlgorithm keyExchangeAlgorithm = GetKeyExchangeAlgorithm(cipherSuite);
+            var result = false;
+            var keyExchangeAlgorithm = GetKeyExchangeAlgorithm(cipherSuite);
             switch (keyExchangeAlgorithm)
             {
                 case TKeyExchangeAlgorithm.NotSet:
-                    break;
+                    {
+                        break;
+                    }
                 case TKeyExchangeAlgorithm.PSK:
                 case TKeyExchangeAlgorithm.ECDHE_PSK:
-                    result = haveValidatePSKCallback || ((pskIdentities != null) && (pskIdentities.Count > 0));
-                    break;
+                    {
+                        result = haveValidatePSKCallback || ((pskIdentities != null) && (pskIdentities.Count > 0));
+                        break;
+                    }
                 case TKeyExchangeAlgorithm.ECDH_ECDSA:
                 case TKeyExchangeAlgorithm.ECDHE_ECDSA:
-                    result = (privateKey != null);
-                    break;
+                    {
+                        result = (privateKey != null);
+                        break;
+                    }
                 default:
-                    break;
+                    {
+                        break;
+                    }
             }
             return result;
         }
 
         public static bool SupportedVersion(TCipherSuite cipherSuite, Version version)
         {
-            bool result = false;
-            CipherSuite suite;
-            if (_CipherSuites.TryGetValue(cipherSuite, out suite))
+            if(version == null)
             {
-                result = suite.MinVersion <= version;
+                throw new ArgumentNullException(nameof(version));
             }
-            return result;
+            
+            if (_CipherSuites.TryGetValue(cipherSuite, out var suite))
+            {
+                return suite.MinVersion <= version;
+            }
+            return false;
         }
 
 

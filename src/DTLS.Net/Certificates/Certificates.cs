@@ -21,33 +21,54 @@
 ***********************************************************************************************************************/
 
 using Org.BouncyCastle.Asn1;
+using Org.BouncyCastle.Asn1.Pkcs;
+using Org.BouncyCastle.Asn1.Sec;
 using Org.BouncyCastle.Asn1.X509;
+using Org.BouncyCastle.Asn1.X9;
 using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Crypto.Generators;
 using Org.BouncyCastle.Crypto.Operators;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Crypto.Prng;
 using Org.BouncyCastle.Math;
+using Org.BouncyCastle.OpenSsl;
 using Org.BouncyCastle.Security;
 using Org.BouncyCastle.Utilities;
 using Org.BouncyCastle.X509;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
-using Org.BouncyCastle.Asn1.Pkcs;
-using System.Collections;
 
 namespace DTLS
 {
     public static class Certificates
     {
 
-        private static void AddStandardCertificateInfo(X509V3CertificateGenerator certificateGenerator, SecureRandom random, CertificateSubject subject, CertificateSubject issuer, DateTime startDate, DateTime expiryDate)
+        private static void AddStandardCertificateInfo(X509V3CertificateGenerator certificateGenerator, SecureRandom random, 
+            CertificateSubject subject, CertificateSubject issuer, DateTime startDate, DateTime expiryDate)
         {
-            BigInteger serialNumber = BigIntegers.CreateRandomInRange(BigInteger.One, BigInteger.ValueOf(Int64.MaxValue), random);
+            if(certificateGenerator == null)
+            {
+                throw new ArgumentNullException(nameof(certificateGenerator));
+            }
+
+            if(random == null)
+            {
+                throw new ArgumentNullException(nameof(random));
+            }
+
+            if(subject == null)
+            {
+                throw new ArgumentNullException(nameof(subject));
+            }
+
+            if(issuer == null)
+            {
+                throw new ArgumentNullException(nameof(issuer));
+            }
+
+            var serialNumber = BigIntegers.CreateRandomInRange(BigInteger.One, BigInteger.ValueOf(Int64.MaxValue), random);
             certificateGenerator.SetSerialNumber(serialNumber);
 
             certificateGenerator.SetIssuerDN(GetName(issuer));
@@ -59,193 +80,284 @@ namespace DTLS
 
         private static byte[] ExportCertificate(X509Certificate certificate, AsymmetricCipherKeyPair subjectKeyPair, TCertificateFormat certificateFormat)
         {
+            if(certificate == null)
+            {
+                throw new ArgumentNullException(nameof(certificate));
+            }
+
+            if(subjectKeyPair == null)
+            {
+                throw new ArgumentNullException(nameof(subjectKeyPair));
+            }
+
             byte[] result = null;
             switch (certificateFormat)
             {
                 case TCertificateFormat.NotSet:
-                    break;
-                case TCertificateFormat.PEM:
-                    using (MemoryStream stream = new MemoryStream())
                     {
-                        using (StreamWriter writer = new StreamWriter(stream))
+                        break;
+                    }
+                case TCertificateFormat.PEM:
+                    {
+                        using (var stream = new MemoryStream())
                         {
-                            Org.BouncyCastle.Utilities.IO.Pem.PemWriter pemWriter = new Org.BouncyCastle.Utilities.IO.Pem.PemWriter(writer);
-                            if (subjectKeyPair.Private is ECKeyParameters)
+                            using (var writer = new StreamWriter(stream))
                             {
-                                ECPrivateKeyParameters priv = (ECPrivateKeyParameters)subjectKeyPair.Private;
-                                ECDomainParameters dp = priv.Parameters;
-                                int orderBitLength = dp.N.BitLength;
-                                Org.BouncyCastle.Asn1.Sec.ECPrivateKeyStructure ec;
-                                Org.BouncyCastle.Asn1.X9.X962Parameters x962;
-                                if (priv.PublicKeyParamSet == null)
+                                var pemWriter = new PemWriter(writer);
+                                if (subjectKeyPair.Private is ECKeyParameters)
                                 {
-                                    Org.BouncyCastle.Asn1.X9.X9ECParameters ecP = new Org.BouncyCastle.Asn1.X9.X9ECParameters(dp.Curve, dp.G, dp.N, dp.H, dp.GetSeed());
-                                    x962 = new Org.BouncyCastle.Asn1.X9.X962Parameters(ecP);
+                                    var priv = (ECPrivateKeyParameters)subjectKeyPair.Private;
+                                    var dp = priv.Parameters;
+                                    var orderBitLength = dp.N.BitLength;
+                                    ECPrivateKeyStructure ec;
+                                    X962Parameters x962;
+                                    if (priv.PublicKeyParamSet == null)
+                                    {
+                                        var ecP = new X9ECParameters(dp.Curve, dp.G, dp.N, dp.H, dp.GetSeed());
+                                        x962 = new X962Parameters(ecP);
+                                    }
+                                    else
+                                    {
+                                        x962 = new X962Parameters(priv.PublicKeyParamSet);
+                                    }
+                                    ec = new ECPrivateKeyStructure(orderBitLength, priv.D, SubjectPublicKeyInfoFactory.CreateSubjectPublicKeyInfo(subjectKeyPair.Public).PublicKeyData, x962);
+                                    pemWriter.WriteObject(new Org.BouncyCastle.Utilities.IO.Pem.PemObject("EC PRIVATE KEY", ec.GetEncoded()));
                                 }
                                 else
                                 {
-                                    x962 = new Org.BouncyCastle.Asn1.X9.X962Parameters(priv.PublicKeyParamSet);
+                                    pemWriter.WriteObject(new MiscPemGenerator(subjectKeyPair.Private));
                                 }
-                                ec = new Org.BouncyCastle.Asn1.Sec.ECPrivateKeyStructure(orderBitLength, priv.D, SubjectPublicKeyInfoFactory.CreateSubjectPublicKeyInfo(subjectKeyPair.Public).PublicKeyData, x962);
-                                pemWriter.WriteObject(new Org.BouncyCastle.Utilities.IO.Pem.PemObject("EC PRIVATE KEY", ec.GetEncoded()));
+                                pemWriter.WriteObject(new MiscPemGenerator(subjectKeyPair.Public));
+                                pemWriter.WriteObject(new MiscPemGenerator(certificate));
+                                writer.Flush();
+                                result = stream.ToArray();
                             }
-                            else
-                            {
-                                pemWriter.WriteObject(new Org.BouncyCastle.OpenSsl.MiscPemGenerator(subjectKeyPair.Private));
-                            }
-                            pemWriter.WriteObject(new Org.BouncyCastle.OpenSsl.MiscPemGenerator(subjectKeyPair.Public));
-                            pemWriter.WriteObject(new Org.BouncyCastle.OpenSsl.MiscPemGenerator(certificate));
-                            writer.Flush();
-                            result = stream.ToArray();
                         }
                     }
                     break;
                 case TCertificateFormat.PFX:
-                    //Asn1Sequence asn1Sequence = Asn1Sequence.GetInstance(Asn1Object.FromByteArray(certificate.GetEncoded()));
-                    //asn1Sequence.GetObjects
-                    //Org.BouncyCastle.Asn1.Pkcs.Pfx pfx = new Org.BouncyCastle.Asn1.Pkcs.Pfx();
-                    //Org.BouncyCastle.Asn1.Pkcs.PrivateKeyInfo info = Org.BouncyCastle.Pkcs.PrivateKeyInfoFactory.CreatePrivateKeyInfo(subjectKeyPair.Private);
-                    //result = pfx.GetEncoded(Asn1Encodable.Der);
-                    break;
+                    {
+                        //Asn1Sequence asn1Sequence = Asn1Sequence.GetInstance(Asn1Object.FromByteArray(certificate.GetEncoded()));
+                        //asn1Sequence.GetObjects
+                        //Org.BouncyCastle.Asn1.Pkcs.Pfx pfx = new Org.BouncyCastle.Asn1.Pkcs.Pfx();
+                        //Org.BouncyCastle.Asn1.Pkcs.PrivateKeyInfo info = Org.BouncyCastle.Pkcs.PrivateKeyInfoFactory.CreatePrivateKeyInfo(subjectKeyPair.Private);
+                        //result = pfx.GetEncoded(Asn1Encodable.Der);
+                        break;
+                    }
                 case TCertificateFormat.CER:
-                    result = certificate.GetEncoded();
-                    break;
+                    {
+                        result = certificate.GetEncoded();
+                        break;
+                    }
                 default:
-                    break;
+                    {
+                        break;
+                    }
             }
             return result;
         }
 
-        private static AsymmetricCipherKeyPair GenerateKeys(X509V3CertificateGenerator certificateGenerator, SecureRandom random, SignatureHashAlgorithm signatureAlgorithm)
+        private static AsymmetricCipherKeyPair GenerateKeys(X509V3CertificateGenerator certificateGenerator, SecureRandom random, 
+            SignatureHashAlgorithm signatureAlgorithm)
         {
+            if(certificateGenerator == null)
+            {
+                throw new ArgumentNullException(nameof(certificateGenerator));
+            }
+
+            if(random == null)
+            {
+                throw new ArgumentNullException(nameof(random));
+            }
+
+            if(signatureAlgorithm == null)
+            {
+                throw new ArgumentNullException(nameof(signatureAlgorithm));
+            }
+            
             AsymmetricCipherKeyPair result = null;
             switch (signatureAlgorithm.Signature)
             {
                 case TSignatureAlgorithm.Anonymous:
-                    break;
+                    {
+                        break;
+                    }
                 case TSignatureAlgorithm.RSA:
-                    KeyGenerationParameters keyGenerationParameters = new KeyGenerationParameters(random, 2048);
-                    RsaKeyPairGenerator rsaKeyPairGenerator = new RsaKeyPairGenerator();
-                    rsaKeyPairGenerator.Init(keyGenerationParameters);
-                    result = rsaKeyPairGenerator.GenerateKeyPair();
-                    break;
+                    {
+                        var keyGenerationParameters = new KeyGenerationParameters(random, 2048);
+                        var rsaKeyPairGenerator = new RsaKeyPairGenerator();
+                        rsaKeyPairGenerator.Init(keyGenerationParameters);
+                        result = rsaKeyPairGenerator.GenerateKeyPair();
+                        break;
+                    }
                 case TSignatureAlgorithm.DSA:
-                    break;
+                    {
+                        break;
+                    }
                 case TSignatureAlgorithm.ECDSA:
-                    //ECDomainParameters ellipticCurveParameters = EllipticCurveFactory.GetEllipticCurveParameters(TEllipticCurve.secp256r1);
-                    ECKeyPairGenerator keyPairGenerator = new ECKeyPairGenerator();
-                    //keyPairGenerator.Init(new ECKeyGenerationParameters(ellipticCurveParameters, random));
-                    keyPairGenerator.Init(new ECKeyGenerationParameters(Org.BouncyCastle.Asn1.Sec.SecObjectIdentifiers.SecP256r1, random));
-                    result = keyPairGenerator.GenerateKeyPair();
-                    //certificateGenerator.AddExtension(X509Extensions.SubjectPublicKeyInfo)
-                    //PrivateKey = (ECPrivateKeyParameters)keys.Private;
-                    //PublicKey = (ECPublicKeyParameters)keys.Public;
-                    break;
+                    {
+                        //ECDomainParameters ellipticCurveParameters = EllipticCurveFactory.GetEllipticCurveParameters(TEllipticCurve.secp256r1);
+                        var keyPairGenerator = new ECKeyPairGenerator();
+                        //keyPairGenerator.Init(new ECKeyGenerationParameters(ellipticCurveParameters, random));
+                        keyPairGenerator.Init(new ECKeyGenerationParameters(SecObjectIdentifiers.SecP256r1, random));
+                        result = keyPairGenerator.GenerateKeyPair();
+                        //certificateGenerator.AddExtension(X509Extensions.SubjectPublicKeyInfo)
+                        //PrivateKey = (ECPrivateKeyParameters)keys.Private;
+                        //PublicKey = (ECPublicKeyParameters)keys.Public;
+                        break;
+                    }
                 default:
-                    break;
+                    {
+                        break;
+                    }
             }
 
             certificateGenerator.SetPublicKey(result.Public);
             return result;
         }
 
-        public static byte[] GenerateCertificate(CertificateSubject subject, CertificateInfo issuer, DateTime startDate, DateTime expiryDate, SignatureHashAlgorithm signatureAlgorithm, TCertificateFormat certificateFormat)
+        public static byte[] GenerateCertificate(CertificateSubject subject, CertificateInfo issuer, DateTime startDate, 
+            DateTime expiryDate, SignatureHashAlgorithm signatureAlgorithm, TCertificateFormat certificateFormat)
         {
-            byte[] result = null;
-            AsymmetricKeyParameter privateKey = issuer.PrivateKey as AsymmetricKeyParameter;
-            if (privateKey != null)
+            if(subject == null)
             {
-
-                CryptoApiRandomGenerator randomGenerator = new CryptoApiRandomGenerator();
-                SecureRandom random = new SecureRandom(randomGenerator);
-                X509V3CertificateGenerator certificateGenerator = new X509V3CertificateGenerator();
-                AddStandardCertificateInfo(certificateGenerator, random, subject, issuer.Subject, startDate, expiryDate);
-                AsymmetricCipherKeyPair subjectKeyPair = GenerateKeys(certificateGenerator, random, signatureAlgorithm);
-
-                string algorithm = GetAlgorithm(signatureAlgorithm);
-
-                certificateGenerator.AddExtension(X509Extensions.BasicConstraints, true, new BasicConstraints(false));
-                certificateGenerator.AddExtension(X509Extensions.KeyUsage, true, new KeyUsage(KeyUsage.DigitalSignature | KeyUsage.KeyEncipherment));
-                certificateGenerator.AddExtension(X509Extensions.ExtendedKeyUsage, false, new ExtendedKeyUsage(new KeyPurposeID[] { KeyPurposeID.IdKPServerAuth, KeyPurposeID.IdKPClientAuth }));
-                byte[] subjectKeyID = new byte[20];
-                random.NextBytes(subjectKeyID, 0, 20);
-                certificateGenerator.AddExtension(X509Extensions.SubjectKeyIdentifier, false, new SubjectKeyIdentifier(subjectKeyID));
-                if (issuer.SubjectKeyID != null)
-                    certificateGenerator.AddExtension(X509Extensions.AuthorityKeyIdentifier, false, new AuthorityKeyIdentifier(issuer.SubjectKeyID));
-
-                //if ((subject.AlternativeNames != null) && (subject.AlternativeNames.Count > 0))
-                //{
-                //    certificateGenerator.AddExtension(X509Extensions.SubjectAlternativeName, true, new SubjectAlternativeNames(false));
-                //    //SubjectAlternativeName
-                //    //GeneralName.DirectoryName
-                //    //GeneralName.IPAddress
-                //}
-
-                Org.BouncyCastle.X509.X509Certificate certificate = certificateGenerator.Generate(new Asn1SignatureFactory(algorithm, privateKey, random));
-                result = ExportCertificate(certificate, subjectKeyPair, certificateFormat);
+                throw new ArgumentNullException(nameof(subject));
             }
-            return result;
+
+            if(issuer == null)
+            {
+                throw new ArgumentNullException(nameof(issuer));
+            }
+
+            if(signatureAlgorithm == null)
+            {
+                throw new ArgumentNullException(nameof(issuer));
+            }
+
+            if (!(issuer.PrivateKey is AsymmetricKeyParameter privateKey))
+            {
+                return null;
+            }
+
+            var randomGenerator = new CryptoApiRandomGenerator();
+            var random = new SecureRandom(randomGenerator);
+            var certificateGenerator = new X509V3CertificateGenerator();
+            AddStandardCertificateInfo(certificateGenerator, random, subject, issuer.Subject, startDate, expiryDate);
+            var subjectKeyPair = GenerateKeys(certificateGenerator, random, signatureAlgorithm);
+
+            var algorithm = GetAlgorithm(signatureAlgorithm);
+
+            certificateGenerator.AddExtension(X509Extensions.BasicConstraints, true, new BasicConstraints(false));
+            certificateGenerator.AddExtension(X509Extensions.KeyUsage, true, new KeyUsage(KeyUsage.DigitalSignature | KeyUsage.KeyEncipherment));
+            certificateGenerator.AddExtension(X509Extensions.ExtendedKeyUsage, false, new ExtendedKeyUsage(new KeyPurposeID[] { KeyPurposeID.IdKPServerAuth, KeyPurposeID.IdKPClientAuth }));
+            var subjectKeyID = new byte[20];
+            random.NextBytes(subjectKeyID, 0, 20);
+            certificateGenerator.AddExtension(X509Extensions.SubjectKeyIdentifier, false, new SubjectKeyIdentifier(subjectKeyID));
+            if (issuer.SubjectKeyID != null)
+            {
+                certificateGenerator.AddExtension(X509Extensions.AuthorityKeyIdentifier, false, new AuthorityKeyIdentifier(issuer.SubjectKeyID));
+            }
+
+            //if ((subject.AlternativeNames != null) && (subject.AlternativeNames.Count > 0))
+            //{
+            //    certificateGenerator.AddExtension(X509Extensions.SubjectAlternativeName, true, new SubjectAlternativeNames(false));
+            //    //SubjectAlternativeName
+            //    //GeneralName.DirectoryName
+            //    //GeneralName.IPAddress
+            //}
+
+            var certificate = certificateGenerator.Generate(new Asn1SignatureFactory(algorithm, privateKey, random));
+            return ExportCertificate(certificate, subjectKeyPair, certificateFormat);
         }
 
-        public static byte[] GenerateIntermediateCACertificate(CertificateSubject subject, CertificateInfo issuer, DateTime startDate, DateTime expiryDate, SignatureHashAlgorithm signatureAlgorithm, TCertificateFormat certificateFormat)
+        public static byte[] GenerateIntermediateCACertificate(CertificateSubject subject, CertificateInfo issuer, DateTime startDate, 
+            DateTime expiryDate, SignatureHashAlgorithm signatureAlgorithm, TCertificateFormat certificateFormat)
         {
-            byte[] result = null;
-            AsymmetricKeyParameter privateKey = issuer.PrivateKey as AsymmetricKeyParameter;
-            if (privateKey != null)
+            if(subject == null)
             {
-                CryptoApiRandomGenerator randomGenerator = new CryptoApiRandomGenerator();
-                SecureRandom random = new SecureRandom(randomGenerator);
-                X509V3CertificateGenerator certificateGenerator = new X509V3CertificateGenerator();
-                AddStandardCertificateInfo(certificateGenerator, random, subject, issuer.Subject, startDate, expiryDate);
-                AsymmetricCipherKeyPair subjectKeyPair = GenerateKeys(certificateGenerator, random, signatureAlgorithm);
-
-                certificateGenerator.AddExtension(X509Extensions.BasicConstraints, true, new BasicConstraints(0));
-                certificateGenerator.AddExtension(X509Extensions.KeyUsage, true, new KeyUsage(KeyUsage.DigitalSignature | KeyUsage.KeyCertSign));
-                byte[] subjectKeyID = new byte[20];
-                random.NextBytes(subjectKeyID, 0, 20);
-                certificateGenerator.AddExtension(X509Extensions.SubjectKeyIdentifier, false, new SubjectKeyIdentifier(subjectKeyID));
-                if (issuer.SubjectKeyID != null)
-                    certificateGenerator.AddExtension(X509Extensions.AuthorityKeyIdentifier, false, new AuthorityKeyIdentifier(issuer.SubjectKeyID));
-
-                string algorithm = GetAlgorithm(signatureAlgorithm);
-
-                Org.BouncyCastle.X509.X509Certificate certificate = certificateGenerator.Generate(new Asn1SignatureFactory(algorithm, privateKey, random));
-
-                result = ExportCertificate(certificate, subjectKeyPair, certificateFormat);
+                throw new ArgumentNullException(nameof(subject));
             }
-            return result;
+            
+            if(issuer == null)
+            {
+                throw new ArgumentNullException(nameof(issuer));
+            }
+
+            if(signatureAlgorithm == null)
+            {
+                throw new ArgumentNullException(nameof(signatureAlgorithm));
+            }
+
+            if (!(issuer.PrivateKey is AsymmetricKeyParameter privateKey))
+            {
+                return null;
+            }
+
+            var randomGenerator = new CryptoApiRandomGenerator();
+            var random = new SecureRandom(randomGenerator);
+            var certificateGenerator = new X509V3CertificateGenerator();
+            AddStandardCertificateInfo(certificateGenerator, random, subject, issuer.Subject, startDate, expiryDate);
+            var subjectKeyPair = GenerateKeys(certificateGenerator, random, signatureAlgorithm);
+
+            certificateGenerator.AddExtension(X509Extensions.BasicConstraints, true, new BasicConstraints(0));
+            certificateGenerator.AddExtension(X509Extensions.KeyUsage, true, new KeyUsage(KeyUsage.DigitalSignature | KeyUsage.KeyCertSign));
+            var subjectKeyID = new byte[20];
+            random.NextBytes(subjectKeyID, 0, 20);
+            certificateGenerator.AddExtension(X509Extensions.SubjectKeyIdentifier, false, new SubjectKeyIdentifier(subjectKeyID));
+            if (issuer.SubjectKeyID != null)
+            {
+                certificateGenerator.AddExtension(X509Extensions.AuthorityKeyIdentifier, false, new AuthorityKeyIdentifier(issuer.SubjectKeyID));
+            }
+
+            var algorithm = GetAlgorithm(signatureAlgorithm);
+
+            var certificate = certificateGenerator.Generate(new Asn1SignatureFactory(algorithm, privateKey, random));
+
+            return ExportCertificate(certificate, subjectKeyPair, certificateFormat);
         }
 
-        public static byte[] GenerateRootCACertificate(CertificateSubject subject, DateTime startDate, DateTime expiryDate, SignatureHashAlgorithm signatureAlgorithm, TCertificateFormat certificateFormat)
+        public static byte[] GenerateRootCACertificate(CertificateSubject subject, DateTime startDate, DateTime expiryDate,
+            SignatureHashAlgorithm signatureAlgorithm, TCertificateFormat certificateFormat)
         {
-            byte[] result = null;
+            if(subject == null)
+            {
+                throw new ArgumentNullException(nameof(subject));
+            }
 
-            CryptoApiRandomGenerator randomGenerator = new CryptoApiRandomGenerator();
-            SecureRandom random = new SecureRandom(randomGenerator);
-            X509V3CertificateGenerator certificateGenerator = new X509V3CertificateGenerator();
+            if(signatureAlgorithm == null)
+            {
+                throw new ArgumentNullException(nameof(signatureAlgorithm));
+            }
+            
+            var randomGenerator = new CryptoApiRandomGenerator();
+            var random = new SecureRandom(randomGenerator);
+            var certificateGenerator = new X509V3CertificateGenerator();
             AddStandardCertificateInfo(certificateGenerator, random, subject, subject, startDate, expiryDate);
-            AsymmetricCipherKeyPair subjectKeyPair = GenerateKeys(certificateGenerator, random, signatureAlgorithm);
+            var subjectKeyPair = GenerateKeys(certificateGenerator, random, signatureAlgorithm);
 
             certificateGenerator.AddExtension(X509Extensions.BasicConstraints, true, new BasicConstraints(true));
             certificateGenerator.AddExtension(X509Extensions.KeyUsage, true, new KeyUsage(KeyUsage.DigitalSignature | KeyUsage.KeyCertSign));
-            byte[] subjectKeyID = new byte[20];
+            var subjectKeyID = new byte[20];
             random.NextBytes(subjectKeyID, 0, 20);
             certificateGenerator.AddExtension(X509Extensions.SubjectKeyIdentifier, false, new SubjectKeyIdentifier(subjectKeyID));
             certificateGenerator.AddExtension(X509Extensions.AuthorityKeyIdentifier, false, new AuthorityKeyIdentifier(subjectKeyID));
 
-            string algorithm = GetAlgorithm(signatureAlgorithm);
+            var algorithm = GetAlgorithm(signatureAlgorithm);
             // selfsign certificate
-            Org.BouncyCastle.X509.X509Certificate certificate = certificateGenerator.Generate(new Asn1SignatureFactory(algorithm, subjectKeyPair.Private, random));
+            var certificate = certificateGenerator.Generate(new Asn1SignatureFactory(algorithm, subjectKeyPair.Private, random));
 
-            result = ExportCertificate(certificate, subjectKeyPair, certificateFormat);
-
-            return result;
+            return ExportCertificate(certificate, subjectKeyPair, certificateFormat);
         }
 
         private static string GetAlgorithm(SignatureHashAlgorithm signatureAlgorithm)
         {
+            if(signatureAlgorithm == null)
+            {
+                throw new ArgumentNullException(nameof(signatureAlgorithm));
+            }
+
             // eg "SHA256WithRSA", "SHA224WithECDSA",;
-            StringBuilder result = new StringBuilder();
+            var result = new StringBuilder();
             result.Append(signatureAlgorithm.Hash.ToString());
             result.Append("With");
             result.Append(signatureAlgorithm.Signature.ToString());
@@ -254,50 +366,71 @@ namespace DTLS
 
         public static CertificateInfo GetCertificateInfo(byte[] certificate, TCertificateFormat certificateFormat)
         {
+            if(certificate == null)
+            {
+                throw new ArgumentNullException(nameof(certificate));
+            }
+
             CertificateInfo result = null;
             X509CertificateStructure cert = null;
             switch (certificateFormat)
             {
                 case TCertificateFormat.NotSet:
-                    break;
-                case TCertificateFormat.PEM:
-                    Org.BouncyCastle.Utilities.IO.Pem.PemReader reader = new Org.BouncyCastle.Utilities.IO.Pem.PemReader(new StreamReader(new MemoryStream(certificate)));
-                    Org.BouncyCastle.Utilities.IO.Pem.PemObject pem = reader.ReadPemObject();
-                    while (pem != null)
                     {
-                        if (pem.Type.EndsWith("CERTIFICATE"))
-                        {
-                            cert = X509CertificateStructure.GetInstance(pem.Content);
-                        }
-                        else if (pem.Type.EndsWith("PRIVATE KEY"))
-                        {
-                            if (result == null)
-                                result = new CertificateInfo();
-
-                            result.PrivateKey = GetPrivateKeyFromPEM(pem);
-                        }
-                        pem = reader.ReadPemObject();
+                        break;
                     }
-                    break;
+                case TCertificateFormat.PEM:
+                    {
+                        var reader = new PemReader(new StreamReader(new MemoryStream(certificate)));
+                        var pem = reader.ReadPemObject();
+                        while (pem != null)
+                        {
+                            if (pem.Type.EndsWith("CERTIFICATE"))
+                            {
+                                cert = X509CertificateStructure.GetInstance(pem.Content);
+                            }
+                            else if (pem.Type.EndsWith("PRIVATE KEY"))
+                            {
+                                if (result == null)
+                                {
+                                    result = new CertificateInfo();
+                                }
+
+                                result.PrivateKey = GetPrivateKeyFromPEM(pem);
+                            }
+                            pem = reader.ReadPemObject();
+                        }
+                        break;
+                    }
                 case TCertificateFormat.PFX:
-                    break;
+                    {
+                        break;
+                    }
                 case TCertificateFormat.CER:
-                    cert = X509CertificateStructure.GetInstance(certificate);
-                    break;
+                    {
+                        cert = X509CertificateStructure.GetInstance(certificate);
+                        break;
+                    }
                 default:
-                    break;
+                    {
+                        break;
+                    }
             }
+
             if (cert != null)
             {
                 if (result == null)
+                {
                     result = new CertificateInfo();
+                }
+
                 result.Subject = new CertificateSubject(cert);
-                X509Certificate certX509 = new X509Certificate(cert);
-                Asn1OctetString subjectKeyID = certX509.GetExtensionValue(X509Extensions.SubjectKeyIdentifier);
+                var certX509 = new X509Certificate(cert);
+                var subjectKeyID = certX509.GetExtensionValue(X509Extensions.SubjectKeyIdentifier);
                 if (subjectKeyID != null)
                 {
-                    byte[] encodeKeyID = subjectKeyID.GetOctets();
-                    byte[] keyID = new byte[encodeKeyID[1]];
+                    var encodeKeyID = subjectKeyID.GetOctets();
+                    var keyID = new byte[encodeKeyID[1]];
                     Buffer.BlockCopy(encodeKeyID, 2, keyID, 0, encodeKeyID[1]);
                     result.SubjectKeyID = keyID;
                 }
@@ -307,8 +440,13 @@ namespace DTLS
 
         private static X509Name GetName(CertificateSubject info)
         {
-            List<DerObjectIdentifier> ids = new List<DerObjectIdentifier>();
-            List<string> values = new List<string>();
+            if(info == null)
+            {
+                throw new ArgumentNullException(nameof(info));
+            }
+
+            var ids = new List<DerObjectIdentifier>();
+            var values = new List<string>();
             if (!string.IsNullOrEmpty(info.CommonName))
             {
                 ids.Add(X509Name.CN);
@@ -344,13 +482,17 @@ namespace DTLS
 
         internal static AsymmetricKeyParameter GetPrivateKeyFromPEM(Org.BouncyCastle.Utilities.IO.Pem.PemObject pem)
         {
-            AsymmetricKeyParameter result = null;
+            if(pem == null)
+            {
+                throw new ArgumentNullException(nameof(pem));
+            }
+            
             if (pem.Type.EndsWith("EC PRIVATE KEY"))
             {
-                Asn1Sequence sequence = Asn1Sequence.GetInstance(pem.Content);
-                IEnumerator e = sequence.GetEnumerator();
+                var sequence = Asn1Sequence.GetInstance(pem.Content);
+                var e = sequence.GetEnumerator();
                 e.MoveNext();
-                BigInteger version = ((DerInteger)e.Current).Value;
+                var version = ((DerInteger)e.Current).Value;
                 PrivateKeyInfo privateKeyInfo;
                 if (version.IntValue == 0) //V1
                 {
@@ -358,17 +500,18 @@ namespace DTLS
                 }
                 else
                 {
-                    Org.BouncyCastle.Asn1.Sec.ECPrivateKeyStructure ec = Org.BouncyCastle.Asn1.Sec.ECPrivateKeyStructure.GetInstance(sequence);
-                    AlgorithmIdentifier algId = new AlgorithmIdentifier(Org.BouncyCastle.Asn1.X9.X9ObjectIdentifiers.IdECPublicKey, ec.GetParameters());
+                    var ec = ECPrivateKeyStructure.GetInstance(sequence);
+                    var algId = new AlgorithmIdentifier(X9ObjectIdentifiers.IdECPublicKey, ec.GetParameters());
                     privateKeyInfo = new PrivateKeyInfo(algId, ec.ToAsn1Object());
                 }
-                result = Org.BouncyCastle.Security.PrivateKeyFactory.CreateKey(privateKeyInfo);
+                return PrivateKeyFactory.CreateKey(privateKeyInfo);
             }
             else if (pem.Type.EndsWith("PRIVATE KEY"))
             {
-                result = Org.BouncyCastle.Security.PrivateKeyFactory.CreateKey(pem.Content);
+                return PrivateKeyFactory.CreateKey(pem.Content);
             }
-            return result;
+
+            return null;
         }
 
     }

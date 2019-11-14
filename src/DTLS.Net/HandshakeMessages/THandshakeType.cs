@@ -20,19 +20,16 @@
  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ***********************************************************************************************************************/
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 
 namespace DTLS
 {
-	internal enum THandshakeType
+    internal enum THandshakeType
 	{
 		HelloRequest = 0,
 		ClientHello = 1,
-		ServerHello = 2,		
+		ServerHello = 2,
 		HelloVerifyRequest = 3,
+        NewSessionTicket = 4,
 		Certificate = 11,
 		ServerKeyExchange = 12,
 		CertificateRequest = 13,

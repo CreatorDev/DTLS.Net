@@ -20,17 +20,12 @@
  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ***********************************************************************************************************************/
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-
 namespace DTLS
 {
-	//    enum { client, server } ClientOrServerExtension;
-	//enum { X.509(0), OpenPGP(1), (255) } CertificateType;
-	//rfc7250
-	//rfc6091
+    //    enum { client, server } ClientOrServerExtension;
+    //enum { X.509(0), OpenPGP(1), (255) } CertificateType;
+    //rfc7250
+    //rfc6091
     internal enum TCertificateType
 	{
 		X509 = 0,

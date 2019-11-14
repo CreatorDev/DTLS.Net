@@ -20,15 +20,11 @@
  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ***********************************************************************************************************************/
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 
 namespace DTLS
 {
-	//enum { explicit_prime (1), explicit_char2 (2),
-	//       named_curve (3), reserved(248..255) } ECCurveType;
+    //enum { explicit_prime (1), explicit_char2 (2),
+    //       named_curve (3), reserved(248..255) } ECCurveType;
     internal enum TEllipticCurveType
 	{
 		ExplicitPrime = 1,

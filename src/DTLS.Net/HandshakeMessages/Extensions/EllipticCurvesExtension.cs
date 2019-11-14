@@ -22,61 +22,62 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.IO;
 
 namespace DTLS
 {
-	//rfc4492 section 5.1.2
-	//enum {
-	//    sect163k1 (1), sect163r1 (2), sect163r2 (3),
-	//    sect193r1 (4), sect193r2 (5), sect233k1 (6),
-	//    sect233r1 (7), sect239k1 (8), sect283k1 (9),
-	//    sect283r1 (10), sect409k1 (11), sect409r1 (12),
-	//    sect571k1 (13), sect571r1 (14), secp160k1 (15),
-	//    secp160r1 (16), secp160r2 (17), secp192k1 (18),
-	//    secp192r1 (19), secp224k1 (20), secp224r1 (21),
-	//    secp256k1 (22), secp256r1 (23), secp384r1 (24),
-	//    secp521r1 (25),
-	//    reserved (0xFE00..0xFEFF),
-	//    arbitrary_explicit_prime_curves(0xFF01),
-	//    arbitrary_explicit_char2_curves(0xFF02),
-	//    (0xFFFF)
-	//} NamedCurve;
+    //rfc4492 section 5.1.2
+    //enum {
+    //    sect163k1 (1), sect163r1 (2), sect163r2 (3),
+    //    sect193r1 (4), sect193r2 (5), sect233k1 (6),
+    //    sect233r1 (7), sect239k1 (8), sect283k1 (9),
+    //    sect283r1 (10), sect409k1 (11), sect409r1 (12),
+    //    sect571k1 (13), sect571r1 (14), secp160k1 (15),
+    //    secp160r1 (16), secp160r2 (17), secp192k1 (18),
+    //    secp192r1 (19), secp224k1 (20), secp224r1 (21),
+    //    secp256k1 (22), secp256r1 (23), secp384r1 (24),
+    //    secp521r1 (25),
+    //    reserved (0xFE00..0xFEFF),
+    //    arbitrary_explicit_prime_curves(0xFF01),
+    //    arbitrary_explicit_char2_curves(0xFF02),
+    //    (0xFFFF)
+    //} NamedCurve;
 
-	//struct {
-	//    NamedCurve elliptic_curve_list<1..2^16-1>
-	//} EllipticCurveList;
+    //struct {
+    //    NamedCurve elliptic_curve_list<1..2^16-1>
+    //} EllipticCurveList;
 
-	internal class EllipticCurvesExtension : IExtension
+    internal class EllipticCurvesExtension : IExtension
 	{
-		List<TEllipticCurve> _SupportedCurves;
+        public TExtensionType ExtensionType => TExtensionType.EllipticCurves;
 
-		public TExtensionType ExtensionType { get { return TExtensionType.EllipticCurves; } }
+        public List<TEllipticCurve> SupportedCurves { get; }
 
-		public List<TEllipticCurve> SupportedCurves { get { return _SupportedCurves; } }
+        public EllipticCurvesExtension() => this.SupportedCurves = new List<TEllipticCurve>();
 
-		public EllipticCurvesExtension()
+
+        public int CalculateSize()
 		{
-			_SupportedCurves = new List<TEllipticCurve>();
-		}
+			var result = 2;
+			if (this.SupportedCurves != null)
+            {
+                result += (this.SupportedCurves.Count * 2);
+            }
 
-
-		public int CalculateSize()
-		{
-			int result = 2;
-			if (_SupportedCurves != null)
-				result += (_SupportedCurves.Count * 2);
-			return result;
+            return result;
 		}
 
 
 		public static EllipticCurvesExtension Deserialise(Stream stream)
 		{
-			EllipticCurvesExtension result = new EllipticCurvesExtension();
-			ushort length = NetworkByteOrderConverter.ToUInt16(stream);
-			ushort supportedCurvesLength = (ushort)(length / 2);
+            if(stream == null)
+            {
+                throw new ArgumentNullException(nameof(stream));
+            }
+
+			var result = new EllipticCurvesExtension();
+			var length = NetworkByteOrderConverter.ToUInt16(stream);
+			var supportedCurvesLength = (ushort)(length / 2);
 			if (supportedCurvesLength > 0)
 			{
 				for (uint index = 0; index < supportedCurvesLength; index++)
@@ -84,21 +85,29 @@ namespace DTLS
 					result.SupportedCurves.Add((TEllipticCurve)NetworkByteOrderConverter.ToUInt16(stream));
 				}
 			}
+
 			return result;
 		}
 
 		public void Serialise(Stream stream)
 		{
+            if (stream == null)
+            {
+                throw new ArgumentNullException(nameof(stream));
+            }
+
             ushort length = 0;
-            if (_SupportedCurves == null)
+            if (this.SupportedCurves == null)
+            {
                 NetworkByteOrderConverter.WriteUInt16(stream, length);
+            }
             else
             {
-                length = (ushort)(_SupportedCurves.Count * 2);
+                length = (ushort)(this.SupportedCurves.Count * 2);
                 NetworkByteOrderConverter.WriteUInt16(stream, length);
-                for (int index = 0; index < _SupportedCurves.Count; index++)
+                for (var index = 0; index < this.SupportedCurves.Count; index++)
                 {
-                    NetworkByteOrderConverter.WriteUInt16(stream, (ushort)_SupportedCurves[index]);
+                    NetworkByteOrderConverter.WriteUInt16(stream, (ushort)this.SupportedCurves[index]);
                 }
             }
         }

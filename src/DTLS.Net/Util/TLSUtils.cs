@@ -20,73 +20,76 @@
  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ***********************************************************************************************************************/
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+using DTLS.Net.Util;
+using Org.BouncyCastle.Crypto;
+using Org.BouncyCastle.Crypto.Prng;
 using Org.BouncyCastle.Crypto.Tls;
+using Org.BouncyCastle.Security;
+using System;
+using System.Linq;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using System.Text;
 
 namespace DTLS
 {
-    internal class TLSUtils
+    internal static class TLSUtils
 	{
         public static DateTime UnixEpoch = new DateTime(1970, 1, 1);
 
-		private static byte[] MASTER_SECRET_LABEL;
-		private const int MASTER_SECRET_LENGTH = 48;
-		private static TlsCipherFactory CipherFactory;
-
-		static TLSUtils()
-		{
-			MASTER_SECRET_LABEL = Encoding.ASCII.GetBytes("master secret");
-			CipherFactory = new DefaultTlsCipherFactory();
-		}
-
-        public static bool ByteArrayCompare(byte[] x, byte[] y)
-        {
-            bool result = true;
-            if (x.Length == y.Length)
-            {
-                for (int index = 0; index < x.Length; index++)
-                {
-                    if (x[index] != y[index])
-                    {
-                        result = false;
-                        break;
-                    }
-                }
-            }
-            else
-                result = false;
-            return result;
-        }      
+		private static byte[] _MASTER_SECRET_LABEL = Encoding.ASCII.GetBytes("master secret");
+        private const int MASTER_SECRET_LENGTH = 48;
+		private static TlsCipherFactory _CipherFactory = new DefaultTlsCipherFactory();   
 
 		public static byte[] CalculateMasterSecret(byte[] preMasterSecret, IKeyExchange keyExchange)
 		{
-			byte[] result;
-			byte[] clientRandom = keyExchange.ClientRandom.Serialise();
-			byte[] serverRandom = keyExchange.ServerRandom.Serialise();
-			byte[] seed = new byte[MASTER_SECRET_LABEL.Length + clientRandom.Length + serverRandom.Length];
-			Buffer.BlockCopy(MASTER_SECRET_LABEL, 0, seed, 0, MASTER_SECRET_LABEL.Length);
-			Buffer.BlockCopy(clientRandom, 0, seed, MASTER_SECRET_LABEL.Length, clientRandom.Length);
-			Buffer.BlockCopy(serverRandom, 0, seed, MASTER_SECRET_LABEL.Length + clientRandom.Length, serverRandom.Length);
-			result = PseudorandomFunction(preMasterSecret, seed, MASTER_SECRET_LENGTH);
+            if(preMasterSecret == null)
+            {
+                throw new ArgumentNullException(nameof(preMasterSecret));
+            }
+
+            if(keyExchange == null)
+            {
+                throw new ArgumentNullException(nameof(keyExchange));
+            }
+
+            var seed = _MASTER_SECRET_LABEL
+                .Concat(keyExchange.ClientRandom.Serialise())
+                .Concat(keyExchange.ServerRandom.Serialise())
+                .ToArray();
+
+			var result = PseudorandomFunction(preMasterSecret, seed, MASTER_SECRET_LENGTH);
 			Array.Clear(preMasterSecret, 0, preMasterSecret.Length);
 			return result;
 		}
               
 		public static byte[] PseudorandomFunction(byte[] secret, byte[] seed, int length)
 		{
-			byte[] result = new byte[length];
-			System.Security.Cryptography.HMACSHA256 hmac = new System.Security.Cryptography.HMACSHA256(secret);
-			int iterations = (int)Math.Ceiling(length / (double)hmac.HashSize);
-			byte[] dataToHash = seed;
-			int offset = 0;
-			for (int index = 0; index < iterations; index++)
+            if(secret == null)
+            {
+                throw new ArgumentNullException(nameof(secret));
+            }
+
+            if(seed == null)
+            {
+                throw new ArgumentNullException(nameof(seed));
+            }
+
+            if(length < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(length));
+            }
+
+			var result = new byte[length];
+			var hmac = new HMACSHA256(secret);
+			var iterations = (int)Math.Ceiling(length / (double)hmac.HashSize);
+			var dataToHash = seed;
+			var offset = 0;
+			for (var index = 0; index < iterations; index++)
 			{
 				dataToHash = hmac.ComputeHash(dataToHash);
 				hmac.TransformBlock(dataToHash, 0, dataToHash.Length, dataToHash, 0);
-				byte[] hash = hmac.TransformFinalBlock(seed, 0, seed.Length);
+				var hash = hmac.TransformFinalBlock(seed, 0, seed.Length);
 				Buffer.BlockCopy(hash, 0, result, offset, Math.Min(hash.Length, length - offset));
 				offset += hash.Length;
 			}
@@ -95,63 +98,174 @@ namespace DTLS
 
 		private static int GetEncryptionAlgorithm(TCipherSuite cipherSuite)
 		{
-			int result = 0;
-			if (cipherSuite == TCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8)
-				result = EncryptionAlgorithm.AES_128_CCM_8;
-			else if (cipherSuite == TCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256)
-				result = EncryptionAlgorithm.AES_128_CBC;
-			else if (cipherSuite == TCipherSuite.TLS_PSK_WITH_AES_128_CCM_8)
-				result = EncryptionAlgorithm.AES_128_CCM_8;
-			else if (cipherSuite == TCipherSuite.TLS_PSK_WITH_AES_128_CBC_SHA256)
-				result = EncryptionAlgorithm.AES_128_CBC;
-			else if (cipherSuite == TCipherSuite.TLS_ECDHE_PSK_WITH_AES_128_CBC_SHA256)
-				result = EncryptionAlgorithm.AES_128_CBC;
-			return result;
+            if (cipherSuite == TCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8)
+            {
+                return EncryptionAlgorithm.AES_128_CCM_8;
+            }
+
+            if (cipherSuite == TCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256)
+            {
+                return EncryptionAlgorithm.AES_128_CBC;
+            }
+
+            if (cipherSuite == TCipherSuite.TLS_PSK_WITH_AES_128_CCM_8)
+            {
+                return EncryptionAlgorithm.AES_128_CCM_8;
+            }
+
+            if (cipherSuite == TCipherSuite.TLS_PSK_WITH_AES_128_CBC_SHA256)
+            {
+                return EncryptionAlgorithm.AES_128_CBC;
+            }
+
+            if (cipherSuite == TCipherSuite.TLS_ECDHE_PSK_WITH_AES_128_CBC_SHA256)
+            {
+                return EncryptionAlgorithm.AES_128_CBC;
+            }
+
+            if (cipherSuite == TCipherSuite.TLS_RSA_WITH_AES_256_CBC_SHA)
+            {
+                return EncryptionAlgorithm.AES_256_CBC;
+            }
+
+            return 0;
 		}
 
 		private static int GetMACAlgorithm(TCipherSuite cipherSuite)
 		{
-			int result = 0;
-			if (cipherSuite == TCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8)
-				result = MacAlgorithm.cls_null;
-			else if (cipherSuite == TCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256)
-				result = MacAlgorithm.hmac_sha256;
-			else if (cipherSuite == TCipherSuite.TLS_PSK_WITH_AES_128_CCM_8)
-				result = MacAlgorithm.cls_null;
-			else if (cipherSuite == TCipherSuite.TLS_PSK_WITH_AES_128_CBC_SHA256)
-				result = MacAlgorithm.hmac_sha256;
-			else if (cipherSuite == TCipherSuite.TLS_ECDHE_PSK_WITH_AES_128_CBC_SHA256)
-				result = MacAlgorithm.hmac_sha256;
-			return result;
+            if (cipherSuite == TCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8)
+            {
+                return MacAlgorithm.cls_null;
+            }
+
+            if (cipherSuite == TCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256)
+            {
+                return MacAlgorithm.hmac_sha256;
+            }
+
+            if (cipherSuite == TCipherSuite.TLS_PSK_WITH_AES_128_CCM_8)
+            {
+                return MacAlgorithm.cls_null;
+            }
+
+            if (cipherSuite == TCipherSuite.TLS_PSK_WITH_AES_128_CBC_SHA256)
+            {
+                return MacAlgorithm.hmac_sha256;
+            }
+
+            if (cipherSuite == TCipherSuite.TLS_ECDHE_PSK_WITH_AES_128_CBC_SHA256)
+            {
+                return MacAlgorithm.hmac_sha256;
+            }
+
+            if (cipherSuite == TCipherSuite.TLS_RSA_WITH_AES_256_CBC_SHA)
+            {
+                return MacAlgorithm.hmac_sha1;
+            }
+
+            return 0;
 		}
 
         public static TlsCipher AssignCipher(byte[] preMasterSecret, bool client, Version version, HandshakeInfo handshakeInfo)
         {
-            int encryptionAlgorithm = GetEncryptionAlgorithm(handshakeInfo.CipherSuite);
-            int macAlgorithm = GetMACAlgorithm(handshakeInfo.CipherSuite);
+            if(preMasterSecret == null)
+            {
+                throw new ArgumentNullException(nameof(preMasterSecret));
+            }
+
+            if(version == null)
+            {
+                throw new ArgumentNullException(nameof(version));
+            }
+
+            if(handshakeInfo == null)
+            {
+                throw new ArgumentNullException(nameof(handshakeInfo));
+            }
+
             TlsContext context = new DTLSContext(client, version, handshakeInfo);
-            SecurityParameters securityParameters = context.SecurityParameters;
-            byte[] seed = Concat(securityParameters.ClientRandom, securityParameters.ServerRandom);
-            string asciiLabel = ExporterLabel.master_secret;
-            handshakeInfo.MasterSecret = TlsUtilities.PRF(context, preMasterSecret, asciiLabel, seed, 48);
-            //session.Handshake.MasterSecret = TlsUtilities.PRF_legacy(preMasterSecret, asciiLabel, seed, 48);
+            var securityParameters = context.SecurityParameters;
+            var seed = securityParameters.ClientRandom.Concat(securityParameters.ServerRandom).ToArray();
+            var asciiLabel = ExporterLabel.master_secret;
+
+            handshakeInfo.MasterSecret = TlsUtilities.IsTlsV11(context) ?
+                TlsUtilities.PRF_legacy(preMasterSecret, asciiLabel, seed, 48)
+                : TlsUtilities.PRF(context, preMasterSecret, asciiLabel, seed, 48);
 #if DEBUG
             Console.Write("MasterSecret :");
             WriteToConsole(handshakeInfo.MasterSecret);
 #endif
-
-            seed = Concat(securityParameters.ServerRandom, securityParameters.ClientRandom);
-            byte[] key_block = TlsUtilities.PRF(context, handshakeInfo.MasterSecret, ExporterLabel.key_expansion, seed, 96);
-            //byte[] key_block = TlsUtilities.PRF_legacy(session.Handshake.MasterSecret, ExporterLabel.key_expansion, seed, 96);
+            seed = securityParameters.ServerRandom.Concat(securityParameters.ClientRandom).ToArray();
+            var key_block = TlsUtilities.IsTlsV11(context) ?
+                TlsUtilities.PRF_legacy(handshakeInfo.MasterSecret, ExporterLabel.key_expansion, seed, 96)
+                : TlsUtilities.PRF(context, handshakeInfo.MasterSecret, ExporterLabel.key_expansion, seed, 96);
 #if DEBUG
             Console.Write("Key block :");
             WriteToConsole(key_block);
 #endif
-            return CipherFactory.CreateCipher(context, encryptionAlgorithm, macAlgorithm);
+            return _CipherFactory
+                .CreateCipher(context, GetEncryptionAlgorithm(handshakeInfo.CipherSuite), GetMACAlgorithm(handshakeInfo.CipherSuite));
         }
 
-        public static byte[] Sign(Org.BouncyCastle.Crypto.AsymmetricKeyParameter privateKey, bool client, Version version, HandshakeInfo handshakeInfo, SignatureHashAlgorithm signatureHashAlgorithm, byte[] hash)
+        public static byte[] CalculateKeyBlock(TlsContext context, int size)
         {
+            if(context == null)
+            {
+                throw new ArgumentNullException(nameof(context));
+            }
+
+            if(size < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(size));
+            }
+
+            var securityParameters = context.SecurityParameters;
+            var master_secret = securityParameters.MasterSecret;
+            var seed = securityParameters.ServerRandom.Concat(securityParameters.ClientRandom).ToArray();
+
+            return TlsUtilities.IsTlsV11(context)
+                ? TlsUtilities.PRF_legacy(master_secret, ExporterLabel.key_expansion, seed, size)
+                : TlsUtilities.PRF(context, master_secret, ExporterLabel.key_expansion, seed, size);
+        }
+
+        public static byte[] Sign(AsymmetricKeyParameter privateKey, RSACryptoServiceProvider rsaCsp, bool client, Version version, HandshakeInfo handshakeInfo, 
+            SignatureHashAlgorithm signatureHashAlgorithm, byte[] hash)
+        {
+            if (privateKey == null && rsaCsp == null)
+            {
+                throw new ArgumentException("No key or Rsa CSP provided");
+            }
+
+            if (privateKey == null)
+            {
+                if (signatureHashAlgorithm.Signature == TSignatureAlgorithm.RSA)
+                {
+                    return SignRsa(rsaCsp, hash);
+                }
+
+                throw new ArgumentException("Need private key for non-RSA Algorithms");
+            }
+
+            if (version == null)
+            {
+                throw new ArgumentNullException(nameof(version));
+            }
+
+            if(handshakeInfo == null)
+            {
+                throw new ArgumentNullException(nameof(handshakeInfo));
+            }
+
+            if(signatureHashAlgorithm == null)
+            {
+                throw new ArgumentNullException(nameof(signatureHashAlgorithm));
+            }
+
+            if(hash == null)
+            {
+                throw new ArgumentNullException(nameof(hash));
+            }
+
             TlsSigner signer = null;
             switch (signatureHashAlgorithm.Signature)
             {
@@ -170,14 +284,15 @@ namespace DTLS
                 default:
                     break;
             }
-            DTLSContext context = new DTLSContext(client, version, handshakeInfo);
-            Org.BouncyCastle.Crypto.Prng.CryptoApiRandomGenerator randomGenerator = new Org.BouncyCastle.Crypto.Prng.CryptoApiRandomGenerator();
-            context.SecureRandom = new Org.BouncyCastle.Security.SecureRandom(randomGenerator);
+
+            var context = new DTLSContext(client, version, handshakeInfo);
+            var randomGenerator = new CryptoApiRandomGenerator();
+            context.SecureRandom = new SecureRandom(randomGenerator);
 
             signer.Init(context);
             if (TlsUtilities.IsTlsV12(context))
             {
-                SignatureAndHashAlgorithm signatureAndHashAlgorithm = new SignatureAndHashAlgorithm((byte)signatureHashAlgorithm.Hash, (byte)signatureHashAlgorithm.Signature);
+                var signatureAndHashAlgorithm = new SignatureAndHashAlgorithm((byte)signatureHashAlgorithm.Hash, (byte)signatureHashAlgorithm.Signature);
                 return signer.GenerateRawSignature(signatureAndHashAlgorithm, privateKey, hash);
             }
             else
@@ -186,21 +301,40 @@ namespace DTLS
             }
         }
 
+        public static byte[] SignRsa(RSACryptoServiceProvider rsaCsp, byte[] hash)
+        {
+            if(rsaCsp == null)
+            {
+                throw new ArgumentNullException(nameof(rsaCsp));
+            }
 
-        internal static byte[] Concat(byte[] a, byte[] b)
-		{
-			byte[] c = new byte[a.Length + b.Length];
-			Array.Copy(a, 0, c, 0, a.Length);
-			Array.Copy(b, 0, c, a.Length, b.Length);
-			return c;
-		}
+            if(hash == null)
+            {
+                throw new ArgumentNullException(nameof(hash));
+            }
+
+            var cspInfo = rsaCsp.CspKeyContainerInfo;
+            var provider = new CngProvider(cspInfo.ProviderName);
+            var options = CngKeyOpenOptions.None;
+
+            if (cspInfo.MachineKeyStore)
+            {
+                options = CngKeyOpenOptions.MachineKey;
+            }
+
+            using (var cngKey = CngKey.Open(cspInfo.KeyContainerName, provider, options))
+            {
+                var result = NCryptInterop.SignHashRaw(cngKey, hash, rsaCsp.KeySize);
+                return result;
+            }
+        }
 
         public static void WriteToConsole(byte[] data)
         {
             Console.Write("0x");
-            foreach (byte item in data)
+            foreach (var item in data)
             {
-                byte b = ((byte)(item >> 4));
+                var b = ((byte)(item >> 4));
 				Console.Write((char)(b > 9 ? b + 0x37 : b + 0x30));
                 b = ((byte)(item & 0xF));
 				Console.Write((char)(b > 9 ? b + 0x37 : b + 0x30));
@@ -208,26 +342,83 @@ namespace DTLS
             Console.WriteLine();
         }
 
-        public static byte[] GetVerifyData(Version version, HandshakeInfo handshakeInfo, bool client, bool isClientFinished, byte[] handshakeHash)
+        public static byte[] GetVerifyData(Version version, HandshakeInfo handshakeInfo, bool client, bool isClientFinished, 
+            byte[] handshakeHash)
         {
-            string asciiLabel;
+            if(version == null)
+            {
+                throw new ArgumentNullException(nameof(version));
+            }
+
+            if(handshakeInfo == null)
+            {
+                throw new ArgumentNullException(nameof(handshakeInfo));
+            }
+
+            if(handshakeHash == null)
+            {
+                throw new ArgumentNullException(nameof(handshakeHash));
+            }
+
             TlsContext context = new DTLSContext(client, version, handshakeInfo);
-            if (isClientFinished)
-                asciiLabel = ExporterLabel.client_finished;
-            else
-                asciiLabel = ExporterLabel.server_finished;
-            //return TlsUtilities.PRF_legacy(masterSecret, asciiLabel, handshakeHash, 12);
-            return TlsUtilities.PRF(context, handshakeInfo.MasterSecret, asciiLabel, handshakeHash, 12);
+            var asciiLabel = isClientFinished ? ExporterLabel.client_finished : ExporterLabel.server_finished;
+            return TlsUtilities.IsTlsV11(context) ?
+                TlsUtilities.PRF_legacy(handshakeInfo.MasterSecret, asciiLabel, handshakeHash, 12)
+                : TlsUtilities.PRF(context, handshakeInfo.MasterSecret, asciiLabel, handshakeHash, 12);
         }
 
         internal static byte[] GetPSKPreMasterSecret(byte[] otherSecret, byte[] psk)
         {
-            byte[] result = new byte[4 + otherSecret.Length + psk.Length];
+            if(otherSecret == null)
+            {
+                throw new ArgumentNullException(nameof(otherSecret));
+            }
+
+            if(psk == null)
+            {
+                throw new ArgumentNullException(nameof(psk));
+            }
+
+            var result = new byte[4 + otherSecret.Length + psk.Length];
             NetworkByteOrderConverter.WriteUInt16(result, 0, (ushort)otherSecret.Length);
             Buffer.BlockCopy(otherSecret, 0, result, 2, otherSecret.Length);
-            NetworkByteOrderConverter.WriteUInt16(result, 2 + otherSecret.Length, (ushort)psk.Length);
+            NetworkByteOrderConverter.WriteUInt16(result, (uint)(2 + otherSecret.Length), (ushort)psk.Length);
             Buffer.BlockCopy(psk, 0, result, 4 + otherSecret.Length, psk.Length);
             return result;
+        }
+
+        internal static byte[] GetRsaPreMasterSecret(Version version)
+        {
+            if(version == null)
+            {
+                throw new ArgumentNullException(nameof(version));
+            }
+
+            using (var rngCsp = new RNGCryptoServiceProvider())
+            {
+                var randomData = new byte[46];
+                rngCsp.GetBytes(randomData);
+                var versionBytes = new byte[] { (byte)(255 - version.Major), (byte)(255 - version.Minor) };
+                return versionBytes.Concat(randomData).ToArray();
+            }
+        }
+
+        internal static byte[] GetEncryptedRsaPreMasterSecret(byte[] cert, byte[] premaster)
+        {
+            if(cert == null)
+            {
+                throw new ArgumentNullException(nameof(cert));
+            }
+
+            if(premaster == null)
+            {
+                throw new ArgumentNullException(nameof(premaster));
+            }
+
+            var certificate = new X509Certificate2();
+            certificate.Import(cert);
+            var rsa = (RSACryptoServiceProvider)certificate.PublicKey.Key;
+            return rsa.Encrypt(premaster,false);
         }
     }
 }

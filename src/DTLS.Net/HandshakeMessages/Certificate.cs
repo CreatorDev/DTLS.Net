@@ -22,89 +22,95 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.IO;
-using System.Net;
-
-using Org.BouncyCastle.Asn1.X509;
+using System.Linq;
 
 namespace DTLS
 {
 
-	  //opaque ASN.1Cert<1..2^24-1>;
-	  //struct {
-	  //    ASN.1Cert certificate_list<0..2^24-1>;
-	  //} Certificate;
+    //opaque ASN.1Cert<1..2^24-1>;
+    //struct {
+    //    ASN.1Cert certificate_list<0..2^24-1>;
+    //} Certificate;
 
-	internal class Certificate : IHandshakeMessage
+    internal class Certificate : IHandshakeMessage
 	{
+        public byte[] Cert { get; set; }
 
-		private List<byte[]> _CertChain;
-		private TCertificateType _CertificateType;
+        public List<byte[]> CertChain { get; set; }
 
-		public List<byte[]> CertChain
+        public TCertificateType CertificateType { get; set; }
+
+        public THandshakeType MessageType => THandshakeType.Certificate;
+
+        public int CalculateSize(Version version)
 		{
-			get { return _CertChain; }
-			set { _CertChain = value; }
-		}
-
-		public TCertificateType CertificateType
-		{
-			get { return _CertificateType; }
-			set { _CertificateType = value; }
-		}
-
-		public THandshakeType MessageType { get { return THandshakeType.Certificate; } }
-
-		public int CalculateSize(Version version)
-		{
-			int result = 3; // overall Length
-			switch (_CertificateType)
+            var result = 3; // overall Length
+			switch (this.CertificateType)
 			{
 				case TCertificateType.X509:
-					if (_CertChain != null)
-					{
-						foreach (byte[] item in _CertChain)
-						{
-							result += (3 + item.Length);							
-						}
-					}
-					break;
+                    {
+                        if (this.CertChain != null)
+                        {
+                            foreach (var item in this.CertChain)
+                            {
+                                result += (3 + item.Length);
+                            }
+                        }
+                        break;
+                    }
 				case TCertificateType.OpenPGP:
-					break;
+                    {
+                        break;
+                    }
 				case TCertificateType.RawPublicKey:
-					break;
+                    {
+                        break;
+                    }
 				case TCertificateType.Unknown:
-					break;
+                    {
+                        break;
+                    }
 				default:
-					break;
+                    {
+                        break;
+                    }
 			}
 			return result;
 		}
 
 		public static Certificate Deserialise(Stream stream, TCertificateType certificateType)
 		{
-			Certificate result = new Certificate();
-			int certificateChainLength = NetworkByteOrderConverter.ToInt24(stream);
+            if (stream == null)
+            {
+                throw new ArgumentNullException(nameof(stream));
+            }
+
+            var result = new Certificate();
+			var certificateChainLength = NetworkByteOrderConverter.ToInt24(stream);
 			if (certificateChainLength > 0)
 			{
-				result._CertificateType = certificateType;
+				result.CertificateType = certificateType;
 				if (certificateType == TCertificateType.X509)
 				{
-					result._CertChain = new List<byte[]>();
+					result.CertChain = new List<byte[]>();
 					while (certificateChainLength > 0)
 					{
-						int certificateLength = NetworkByteOrderConverter.ToInt24(stream);
-						byte[] certificate = new byte[certificateLength];
+						var certificateLength = NetworkByteOrderConverter.ToInt24(stream);
+						var certificate = new byte[certificateLength];
 						stream.Read(certificate, 0, certificateLength);
-						result._CertChain.Add(certificate);
+						result.CertChain.Add(certificate);
 						certificateChainLength = certificateChainLength - certificateLength - 3;
 					}
-				}
+
+                    if (result.CertChain.Any())
+                    {
+                        result.Cert = result.CertChain[0];
+                    }
+                }
 				else
 				{
-					
+                    throw new NotImplementedException();
 				}
 			}
 			return result;
@@ -112,33 +118,43 @@ namespace DTLS
 
 		public void Serialise(Stream stream, Version version)
 		{
-			int totalLength = CalculateSize(version);
+            if (stream == null)
+            {
+                throw new ArgumentNullException(nameof(stream));
+            }
+
+            if (version == null)
+            {
+                throw new ArgumentNullException(nameof(version));
+            }
+
+            var totalLength = this.CalculateSize(version);
 			NetworkByteOrderConverter.WriteInt24(stream, totalLength-3);
-			switch (_CertificateType)
+			switch (this.CertificateType)
 			{
 				case TCertificateType.X509:
-					if (_CertChain != null)
-					{
-						foreach (byte[] item in _CertChain)
-						{
-							NetworkByteOrderConverter.WriteInt24(stream, item.Length);
-							stream.Write(item, 0, item.Length);
-						}
-					}
-					break;
+                    {
+                        if (this.CertChain != null)
+                        {
+                            foreach (var item in this.CertChain)
+                            {
+                                NetworkByteOrderConverter.WriteInt24(stream, item.Length);
+                                stream.Write(item, 0, item.Length);
+                            }
+                        }
+                        break;
+                    }
 				case TCertificateType.OpenPGP:
-					break;
-				case TCertificateType.RawPublicKey:
-					break;
-				case TCertificateType.Unknown:
-					break;
+                case TCertificateType.RawPublicKey:
+                case TCertificateType.Unknown:
+                    {
+                        throw new NotImplementedException();
+                    }
 				default:
-					break;
+                    {
+                        break;
+                    }
 			}
 		}
-
-
-
-
 	}
 }

@@ -21,119 +21,117 @@
 ***********************************************************************************************************************/
 
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+using System.IO;
 
 namespace DTLS
 {
 
-      //struct {
-      //    select (KeyExchangeAlgorithm) {
-      //        /* other cases for rsa, diffie_hellman, etc. */
-      //        case ec_diffie_hellman_psk:  /* NEW */
-      //            opaque psk_identity_hint<0..2^16-1>;
-      //            ServerECDHParams params;
-      //    };
-      //} ServerKeyExchange;
+    //struct {
+    //    select (KeyExchangeAlgorithm) {
+    //        /* other cases for rsa, diffie_hellman, etc. */
+    //        case ec_diffie_hellman_psk:  /* NEW */
+    //            opaque psk_identity_hint<0..2^16-1>;
+    //            ServerECDHParams params;
+    //    };
+    //} ServerKeyExchange;
     internal class ECDHEPSKServerKeyExchange : IHandshakeMessage
 	{
-        private byte[] _PSKIdentityHint;
-        private byte[] _ServerParams;
+        private readonly byte[] _ServerParams;
 
         private TEllipticCurveType _EllipticCurveType;
-        private TEllipticCurve _EllipticCurve;
-        private byte[] _PublicKeyBytes;
 
-        public THandshakeType MessageType
-        {
-            get { return THandshakeType.ServerKeyExchange; }
-        }
+        public THandshakeType MessageType => THandshakeType.ServerKeyExchange;
 
-        public byte[] PSKIdentityHint
-        {
-            get { return _PSKIdentityHint; }
-            set { _PSKIdentityHint = value; }
-        }
+        public byte[] PSKIdentityHint { get; set; }
 
-        public TEllipticCurve EllipticCurve
-        {
-            get { return _EllipticCurve; }
-        }
+        public TEllipticCurve EllipticCurve { get; private set; }
 
-        public byte[] PublicKeyBytes
-        {
-            get { return _PublicKeyBytes; }
-        }
+        public byte[] PublicKeyBytes { get; private set; }
 
-        public ECDHEPSKServerKeyExchange()
-        {
-            _EllipticCurveType = TEllipticCurveType.NamedCurve;
-        }
+        public ECDHEPSKServerKeyExchange() => this._EllipticCurveType = TEllipticCurveType.NamedCurve;
 
         public ECDHEPSKServerKeyExchange(ECDHEKeyExchange keyExchange)
         {
-            _EllipticCurveType = TEllipticCurveType.NamedCurve;
-            _EllipticCurve = keyExchange.Curve;
-            System.IO.MemoryStream stream = new System.IO.MemoryStream();
-            stream.WriteByte((byte)_EllipticCurveType);
-            NetworkByteOrderConverter.WriteUInt16(stream, (ushort)_EllipticCurve);
-            byte[] pointEncoded = keyExchange.PublicKey.Q.GetEncoded(false);
+            if(keyExchange == null)
+            {
+                throw new ArgumentNullException(nameof(keyExchange));
+            }
+
+            this._EllipticCurveType = TEllipticCurveType.NamedCurve;
+            this.EllipticCurve = keyExchange.Curve;
+            var stream = new MemoryStream();
+            stream.WriteByte((byte)this._EllipticCurveType);
+            NetworkByteOrderConverter.WriteUInt16(stream, (ushort)this.EllipticCurve);
+            var pointEncoded = keyExchange.PublicKey.Q.GetEncoded(false);
             stream.WriteByte((byte)pointEncoded.Length);
             stream.Write(pointEncoded, 0, pointEncoded.Length);
-            _ServerParams = stream.ToArray();
+            this._ServerParams = stream.ToArray();
         }
 
         public int CalculateSize(Version version)
         {
-            int result = 2;
-            if (_PSKIdentityHint != null)
+            var result = 2;
+            if (this.PSKIdentityHint != null)
             {
-                result += _PSKIdentityHint.Length;
+                result += this.PSKIdentityHint.Length;
             }
-            if (_ServerParams != null)
+
+            if (this._ServerParams != null)
             {
-                result += _ServerParams.Length;
+                result += this._ServerParams.Length;
             }
+
             return result;
         }
 
-        public static ECDHEPSKServerKeyExchange Deserialise(System.IO.Stream stream, Version version)
+        public static ECDHEPSKServerKeyExchange Deserialise(Stream stream)
         {
-            ECDHEPSKServerKeyExchange result = new ECDHEPSKServerKeyExchange();
+            if (stream == null)
+            {
+                throw new ArgumentNullException(nameof(stream));
+            }
+
+            var result = new ECDHEPSKServerKeyExchange();
 
             int pdkIdentityHintLenth = NetworkByteOrderConverter.ToUInt16(stream);
             if (pdkIdentityHintLenth > 0)
             {
-                result._PSKIdentityHint = new byte[pdkIdentityHintLenth];
-                stream.Read(result._PSKIdentityHint, 0, pdkIdentityHintLenth);
+                result.PSKIdentityHint = new byte[pdkIdentityHintLenth];
+                stream.Read(result.PSKIdentityHint, 0, pdkIdentityHintLenth);
             }
             result._EllipticCurveType = (TEllipticCurveType)stream.ReadByte();
-            result._EllipticCurve = (TEllipticCurve)NetworkByteOrderConverter.ToUInt16(stream);
-            int length = stream.ReadByte();
+            result.EllipticCurve = (TEllipticCurve)NetworkByteOrderConverter.ToUInt16(stream);
+            var length = stream.ReadByte();
             if (length > 0)
             {
-                result._PublicKeyBytes = new byte[length];
-                stream.Read(result._PublicKeyBytes, 0, length);
+                result.PublicKeyBytes = new byte[length];
+                stream.Read(result.PublicKeyBytes, 0, length);
             }
             return result;
         }
 
 
-        public void Serialise(System.IO.Stream stream, Version version)
+        public void Serialise(Stream stream, Version version)
         {
-            if (_PSKIdentityHint != null)
+            if (stream == null)
             {
-                NetworkByteOrderConverter.WriteUInt16(stream, (ushort)_PSKIdentityHint.Length);
-                stream.Write(_PSKIdentityHint, 0, _PSKIdentityHint.Length);
+                throw new ArgumentNullException(nameof(stream));
+            }
+
+            if (this.PSKIdentityHint != null)
+            {
+                NetworkByteOrderConverter.WriteUInt16(stream, (ushort)this.PSKIdentityHint.Length);
+                stream.Write(this.PSKIdentityHint, 0, this.PSKIdentityHint.Length);
             }
             else
-                NetworkByteOrderConverter.WriteUInt16(stream, 0);
-            if (_ServerParams != null)
             {
-                stream.Write(_ServerParams, 0, _ServerParams.Length);
+                NetworkByteOrderConverter.WriteUInt16(stream, 0);
+            }
+
+            if (this._ServerParams != null)
+            {
+                stream.Write(this._ServerParams, 0, this._ServerParams.Length);
             }
         }
-
 	}
 }

@@ -20,19 +20,15 @@
  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ***********************************************************************************************************************/
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 
 namespace DTLS
 {
-	//    enum { rsa, diffie_hellman } KeyExchangeAlgorithm;
+    //    enum { rsa, diffie_hellman } KeyExchangeAlgorithm;
 
     internal enum TKeyExchangeAlgorithm
 	{
 		NotSet,
-		//RSA, 
+		RSA, 
 		//DiffieHellman
 		PSK,
 		ECDH_ECDSA, 

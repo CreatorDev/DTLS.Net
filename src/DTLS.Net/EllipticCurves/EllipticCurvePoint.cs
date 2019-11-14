@@ -20,28 +20,19 @@
  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ***********************************************************************************************************************/
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Numerics;
 
 namespace DTLS
 {
-	internal class EllipticCurvePoint
+    internal class EllipticCurvePoint
 	{
-		private BigInteger _X;
-		private BigInteger _Y;
+        public BigInteger X { get; set; }
+        public BigInteger Y { get; set; }
 
-
-		public BigInteger X { get { return _X; } set { _X = value; } }
-		public BigInteger Y { get { return _Y; } set { _Y = value; } }
-
-		public EllipticCurvePoint(BigInteger x, BigInteger y)
+        public EllipticCurvePoint(BigInteger x, BigInteger y)
 		{
-			_X = x;
-			_Y = y;
+            this.X = x;
+            this.Y = y;
 		}
-
 	}
 }

@@ -20,93 +20,65 @@
  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ***********************************************************************************************************************/
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+using System.IO;
 
 namespace DTLS
 {
+    //struct {
+    //     HandshakeType msg_type;
+    //     uint24 length;
+    //     uint16 message_seq;                               // New field
+    //     uint24 fragment_offset;                           // New field
+    //     uint24 fragment_length;                           // New field
+    //     select (HandshakeType) {
+    //       case hello_request: HelloRequest;
+    //       case client_hello:  ClientHello;
+    //       case server_hello:  ServerHello;
+    //       case hello_verify_request: HelloVerifyRequest;  // New field
+    //       case certificate:Certificate;
+    //       case server_key_exchange: ServerKeyExchange;
+    //       case certificate_request: CertificateRequest;
+    //       case server_hello_done:ServerHelloDone;
+    //       case certificate_verify:  CertificateVerify;
+    //       case client_key_exchange: ClientKeyExchange;
+    //       case finished: Finished;
+    //     } body; } Handshake;
 
-	//struct {
-	//     HandshakeType msg_type;
-	//     uint24 length;
-	//     uint16 message_seq;                               // New field
-	//     uint24 fragment_offset;                           // New field
-	//     uint24 fragment_length;                           // New field
-	//     select (HandshakeType) {
-	//       case hello_request: HelloRequest;
-	//       case client_hello:  ClientHello;
-	//       case server_hello:  ServerHello;
-	//       case hello_verify_request: HelloVerifyRequest;  // New field
-	//       case certificate:Certificate;
-	//       case server_key_exchange: ServerKeyExchange;
-	//       case certificate_request: CertificateRequest;
-	//       case server_hello_done:ServerHelloDone;
-	//       case certificate_verify:  CertificateVerify;
-	//       case client_key_exchange: ClientKeyExchange;
-	//       case finished: Finished;
-	//     } body; } Handshake;
-
-	internal class HandshakeRecord
+    internal class HandshakeRecord
 	{
 		public const int RECORD_OVERHEAD = 12;
 
-		THandshakeType _MessageType;
-		uint _Length;
-		ushort _MessageSeq;
-		uint _FragmentOffset;
-		uint _FragmentLength;
+        public THandshakeType MessageType { get; set; }
 
-		public THandshakeType MessageType
+        public uint Length { get; set; }
+
+        public ushort MessageSeq { get; set; }
+
+        public uint FragmentOffset { get; set; }
+
+        public uint FragmentLength { get; set; }
+
+
+        public static HandshakeRecord Deserialise(Stream stream)
 		{
-			get { return _MessageType; }
-			set { _MessageType = value; }
+            var result = new HandshakeRecord
+            {
+                MessageType = (THandshakeType)stream.ReadByte(),
+                Length = NetworkByteOrderConverter.ToUInt24(stream),
+                MessageSeq = NetworkByteOrderConverter.ToUInt16(stream),
+                FragmentOffset = NetworkByteOrderConverter.ToUInt24(stream),
+                FragmentLength = NetworkByteOrderConverter.ToUInt24(stream)
+            };
+            return result;
 		}
 
-		public uint Length
+		public void Serialise(Stream stream)
 		{
-			get { return _Length; }
-			set { _Length = value; }
-		}
-
-		public ushort MessageSeq
-		{
-			get { return _MessageSeq; }
-			set { _MessageSeq = value; }
-		}
-
-		public uint FragmentOffset
-		{
-			get { return _FragmentOffset; }
-			set { _FragmentOffset = value; }
-		}
-
-		public uint FragmentLength
-		{
-			get { return _FragmentLength; }
-			set { _FragmentLength = value; }
-		}
-
-
-		public static HandshakeRecord Deserialise(System.IO.Stream stream)
-		{
-			HandshakeRecord result = new HandshakeRecord();
-			result._MessageType = (THandshakeType)stream.ReadByte();
-			result._Length = NetworkByteOrderConverter.ToUInt24(stream);
-			result._MessageSeq = NetworkByteOrderConverter.ToUInt16(stream);
-			result._FragmentOffset = NetworkByteOrderConverter.ToUInt24(stream);
-			result._FragmentLength = NetworkByteOrderConverter.ToUInt24(stream);
-			return result;
-		}
-
-		public void Serialise(System.IO.Stream stream)
-		{
-			stream.WriteByte((byte)_MessageType);
-			NetworkByteOrderConverter.WriteUInt24(stream, _Length);
-			NetworkByteOrderConverter.WriteUInt16(stream, _MessageSeq);
-			NetworkByteOrderConverter.WriteUInt24(stream, _FragmentOffset);
-			NetworkByteOrderConverter.WriteUInt24(stream, _FragmentLength);
+			stream.WriteByte((byte)this.MessageType);
+			NetworkByteOrderConverter.WriteUInt24(stream, this.Length);
+			NetworkByteOrderConverter.WriteUInt16(stream, this.MessageSeq);
+			NetworkByteOrderConverter.WriteUInt24(stream, this.FragmentOffset);
+			NetworkByteOrderConverter.WriteUInt24(stream, this.FragmentLength);
 		}
 	}
 

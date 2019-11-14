@@ -20,14 +20,10 @@
  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ***********************************************************************************************************************/
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 
 namespace DTLS
 {
-	internal interface IKeyExchange
+    internal interface IKeyExchange
 	{
 		RandomData ClientRandom { get; set; }
 

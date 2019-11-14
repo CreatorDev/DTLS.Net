@@ -21,112 +21,102 @@
 ***********************************************************************************************************************/
 
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.IO;
 
 namespace DTLS
 {
-	//    struct {
-	//    ExtensionType extension_type;
-	//    opaque extension_data<0..2^16-1>;
-	//} Extension;
+    //    struct {
+    //    ExtensionType extension_type;
+    //    opaque extension_data<0..2^16-1>;
+    //} Extension;
 
-	internal class Extension
+    internal class Extension
 	{
-		TExtensionType _ExtensionType;
-		IExtension _SpecifcExtension;
-		byte[] _Data;
+        public TExtensionType ExtensionType { get; set; }
 
-		public TExtensionType ExtensionType
-		{
-			get { return _ExtensionType; }
-			set { _ExtensionType = value; }
-		}
+        public byte[] Data { get; set; }
 
-		public byte[] Data
-		{
-			get { return _Data; }
-			set { _Data = value; }
-		}
+        public IExtension SpecificExtension { get; set; }
 
-		public IExtension SpecifcExtension
+        public int CalculateSize()
 		{
-			get { return _SpecifcExtension; }
-			set { _SpecifcExtension = value; }
-		}
-
-		public int CalculateSize()
-		{
-			int result = 4;
-			if (_SpecifcExtension != null)
+			var result = 4;
+			if (this.SpecificExtension != null)
 			{
-				result += _SpecifcExtension.CalculateSize();
+				result += this.SpecificExtension.CalculateSize();
 			}
 			return result;
 		}
 
-        public Extension()
+        public Extension() { }
+
+        public Extension(IExtension specificExtension)
         {
-
+            this.ExtensionType = specificExtension.ExtensionType;
+            this.SpecificExtension = specificExtension;
         }
-
-        public Extension(IExtension specifcExtension)
-        {
-            _ExtensionType = specifcExtension.ExtensionType;
-            _SpecifcExtension = specifcExtension;
-        }
-
 
 		public static Extension Deserialise(Stream stream, bool client)
 		{
+            if(stream == null)
+            {
+                throw new ArgumentNullException(nameof(stream));
+            }
+
 			Extension result = null;
 			if (stream.Position < stream.Length)
 			{
-				result = new Extension();
-				result._ExtensionType = (TExtensionType)NetworkByteOrderConverter.ToUInt16(stream);
-				ushort length = NetworkByteOrderConverter.ToUInt16(stream);
+                result = new Extension
+                {
+                    ExtensionType = (TExtensionType)NetworkByteOrderConverter.ToUInt16(stream)
+                };
+
+                var length = NetworkByteOrderConverter.ToUInt16(stream);
 				if (length > 0)
 				{
-					if (result._ExtensionType == TExtensionType.EllipticCurves)
+					if (result.ExtensionType == TExtensionType.EllipticCurves)
 					{
-						result._SpecifcExtension = EllipticCurvesExtension.Deserialise(stream);
+						result.SpecificExtension = EllipticCurvesExtension.Deserialise(stream);
 					}
-					else if (result._ExtensionType == TExtensionType.ClientCertificateType)
+					else if (result.ExtensionType == TExtensionType.ClientCertificateType)
 					{
-						result._SpecifcExtension = ClientCertificateTypeExtension.Deserialise(stream, client);
+						result.SpecificExtension = ClientCertificateTypeExtension.Deserialise(stream, client);
 					}
-					else if (result._ExtensionType == TExtensionType.ServerCertificateType)
+					else if (result.ExtensionType == TExtensionType.ServerCertificateType)
 					{
-						result._SpecifcExtension = ServerCertificateTypeExtension.Deserialise(stream, client);
+						result.SpecificExtension = ServerCertificateTypeExtension.Deserialise(stream, client);
 					}	
-					else if (result._ExtensionType == TExtensionType.SignatureAlgorithms)
+					else if (result.ExtensionType == TExtensionType.SignatureAlgorithms)
 					{
-						result._SpecifcExtension = SignatureAlgorithmsExtension.Deserialise(stream);
-					}							
+						result.SpecificExtension = SignatureAlgorithmsExtension.Deserialise(stream);
+					}
 					else
 					{
-						result._Data = new byte[length];
-						stream.Read(result._Data, 0, length);
+						result.Data = new byte[length];
+						stream.Read(result.Data, 0, length);
 					}
 				}
 			}
 			return result;
 		}
 
-		public void Serialise(System.IO.Stream stream)
+		public void Serialise(Stream stream)
 		{
-			NetworkByteOrderConverter.WriteUInt16(stream, (ushort)_ExtensionType);
-			int length = 0;
-			if (_SpecifcExtension != null)
+            if(stream == null)
+            {
+                throw new ArgumentNullException(nameof(stream));
+            }
+
+			NetworkByteOrderConverter.WriteUInt16(stream, (ushort)this.ExtensionType);
+			var length = 0;
+			if (this.SpecificExtension != null)
 			{
-				length += _SpecifcExtension.CalculateSize();
+				length += this.SpecificExtension.CalculateSize();
 			}
 			NetworkByteOrderConverter.WriteUInt16(stream, (ushort)length);
-			if (_SpecifcExtension != null)
+			if (this.SpecificExtension != null)
 			{
-				_SpecifcExtension.Serialise(stream);
+                this.SpecificExtension.Serialise(stream);
 			}
 		}
 	}

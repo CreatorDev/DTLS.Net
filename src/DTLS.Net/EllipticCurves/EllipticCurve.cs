@@ -21,58 +21,32 @@
 ***********************************************************************************************************************/
 
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Numerics;
 
 namespace DTLS
 {
-	// either y² = x³ + ax + b  (mod p)
-	// or  y² + xy = x³ + ax² + b
+    // either y² = x³ + ax + b  (mod p)
+    // or  y² + xy = x³ + ax² + b
 
-	internal class EllipticCurve
+    internal class EllipticCurve
 	{
-		private BigInteger _A;
-		private BigInteger _B;
-		private BigInteger _Order;
-		private BigInteger _Cofactor;
+        public BigInteger A { get; }
 
-		private EllipticCurvePoint _BasePoint;
+        public BigInteger B { get; }
 
-		public BigInteger A
+        public BigInteger Order { get; }
+
+        public BigInteger Cofactor { get; }
+
+        public EllipticCurvePoint BasePoint { get; }
+
+        public EllipticCurve(BigInteger a, BigInteger b, BigInteger order, BigInteger cofactor, EllipticCurvePoint basePoint)
 		{
-			get { return _A; }
+            this.A = a;
+            this.B = b;
+            this.Order = order;
+            this.Cofactor = cofactor;
+            this.BasePoint = basePoint ?? throw new ArgumentNullException(nameof(basePoint));
 		}
-
-		public BigInteger B
-		{
-			get { return _B; }
-		}
-
-		public BigInteger Order
-		{
-			get { return _Order; }
-		}
-
-		public BigInteger Cofactor
-		{
-			get { return _Cofactor; }
-		}
-
-		public EllipticCurvePoint BasePoint
-		{
-			get { return _BasePoint; }
-		}
-
-		public EllipticCurve(BigInteger a, BigInteger b, BigInteger order, BigInteger cofactor, EllipticCurvePoint basePoint)
-		{
-			_A = a;
-			_B = b;
-			_Order = order;
-			_Cofactor = cofactor;
-			_BasePoint = basePoint;
-		}
-
 	}
 }

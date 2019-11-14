@@ -5,7 +5,7 @@
     <AssemblyTitle>DTLS.Net</AssemblyTitle>
     <VersionPrefix>1.0.21</VersionPrefix>
     <Authors>Delme Thomas</Authors>
-    <TargetFramework>net451</TargetFramework>
+    <TargetFramework>net47</TargetFramework>
     <AssemblyName>DTLS.Net</AssemblyName>
     <PackageId>DTLS.Net</PackageId>
     <PackageProjectUrl>https://github.com/CreatorDev/DTLS.Net</PackageProjectUrl>
@@ -17,6 +17,7 @@
     <GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
     <GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
     <GenerateAssemblyCopyrightAttribute>false</GenerateAssemblyCopyrightAttribute>
+    <LangVersion>latest</LangVersion>
   </PropertyGroup>
 
   <ItemGroup>

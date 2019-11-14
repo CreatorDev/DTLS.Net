@@ -20,34 +20,14 @@
  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ***********************************************************************************************************************/
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-
 namespace DTLS
 {
     internal class PSKIdentity
     {
-        private byte[] _Identity;
-        private byte[] _Key;
+        public byte[] Identity { get; set; }
 
-        public byte[] Identity
-        {
-            get { return _Identity; }
-            set { _Identity = value; }
-        }
+        public byte[] Key { get; set; }
 
-        public byte[] Key
-        {
-            get { return _Key; }
-            set { _Key = value; }
-        }
-
-        public PSKIdentity()
-        {
-
-        }
-       
+        public PSKIdentity() { }      
     }
 }

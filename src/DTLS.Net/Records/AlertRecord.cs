@@ -21,86 +21,94 @@
 ***********************************************************************************************************************/
 
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+using System.IO;
 
 namespace DTLS
 {
 
-     //enum { warning(1), fatal(2), (255) } AlertLevel;
+    //enum { warning(1), fatal(2), (255) } AlertLevel;
 
-     // enum {
-     //     close_notify(0),
-     //     unexpected_message(10),
-     //     bad_record_mac(20),
-     //     decryption_failed_RESERVED(21),
-     //     record_overflow(22),
-     //     decompression_failure(30),
-     //     handshake_failure(40),
-     //     no_certificate_RESERVED(41),
-     //     bad_certificate(42),
-     //     unsupported_certificate(43),
-     //     certificate_revoked(44),
-     //     certificate_expired(45),
-     //     certificate_unknown(46),
-     //     illegal_parameter(47),
-     //     unknown_ca(48),
-     //     access_denied(49),
-     //     decode_error(50),
-     //     decrypt_error(51),
-     //     export_restriction_RESERVED(60),
-     //     protocol_version(70),
-     //     insufficient_security(71),
-     //     internal_error(80),
-     //     user_canceled(90),
-     //     no_renegotiation(100),
-     //     unsupported_extension(110),
-     //     (255)
-     // } AlertDescription;
+    // enum {
+    //     close_notify(0),
+    //     unexpected_message(10),
+    //     bad_record_mac(20),
+    //     decryption_failed_RESERVED(21),
+    //     record_overflow(22),
+    //     decompression_failure(30),
+    //     handshake_failure(40),
+    //     no_certificate_RESERVED(41),
+    //     bad_certificate(42),
+    //     unsupported_certificate(43),
+    //     certificate_revoked(44),
+    //     certificate_expired(45),
+    //     certificate_unknown(46),
+    //     illegal_parameter(47),
+    //     unknown_ca(48),
+    //     access_denied(49),
+    //     decode_error(50),
+    //     decrypt_error(51),
+    //     export_restriction_RESERVED(60),
+    //     protocol_version(70),
+    //     insufficient_security(71),
+    //     internal_error(80),
+    //     user_canceled(90),
+    //     no_renegotiation(100),
+    //     unsupported_extension(110),
+    //     (255)
+    // } AlertDescription;
 
-     // struct {
-     //     AlertLevel level;
-     //     AlertDescription description;
-     // } Alert;
+    // struct {
+    //     AlertLevel level;
+    //     AlertDescription description;
+    // } Alert;
 
     internal class AlertRecord
     {
-        private TAlertLevel _AlertLevel;
-        private TAlertDescription _AlertDescription;
+        public TAlertLevel AlertLevel { get; set; }
 
-        public TAlertLevel AlertLevel
-        {
-            get { return _AlertLevel; }
-            set { _AlertLevel = value; }
-        }
-
-        public TAlertDescription AlertDescription
-        {
-            get { return _AlertDescription; }
-            set { _AlertDescription = value; }
-        }
+        public TAlertDescription AlertDescription { get; set; }
 
         public static AlertRecord Deserialise(byte[] data)
         {
-            AlertRecord result = new AlertRecord();
-            result._AlertLevel = (TAlertLevel)data[0];
-            result._AlertDescription = (TAlertDescription)data[1];
+            if (data == null)
+            {
+                throw new ArgumentNullException(nameof(data));
+            }
+
+            var result = new AlertRecord
+            {
+                AlertLevel = (TAlertLevel)data[0],
+                AlertDescription = (TAlertDescription)data[1]
+            };
+
             return result;
         }
 
-        public static AlertRecord Deserialise(System.IO.Stream stream)
+        public static AlertRecord Deserialise(Stream stream)
         {
-            AlertRecord result = new AlertRecord();
-            result._AlertLevel = (TAlertLevel)stream.ReadByte();
-            result._AlertDescription = (TAlertDescription)stream.ReadByte();
+            if (stream == null)
+            {
+                throw new ArgumentNullException(nameof(stream));
+            }
+
+            var result = new AlertRecord
+            {
+                AlertLevel = (TAlertLevel)stream.ReadByte(),
+                AlertDescription = (TAlertDescription)stream.ReadByte()
+            };
+
             return result;
         }
 
-        public void Serialise(System.IO.Stream stream)
+        public void Serialise(Stream stream)
         {
-            stream.WriteByte((byte)_AlertLevel);
-            stream.WriteByte((byte)_AlertDescription);
+            if (stream == null)
+            {
+                throw new ArgumentNullException(nameof(stream));
+            }
+
+            stream.WriteByte((byte)this.AlertLevel);
+            stream.WriteByte((byte)this.AlertDescription);
         }
     }
 }

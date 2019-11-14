@@ -22,22 +22,31 @@
 
 using DTLS;
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Net;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace TestServer
 {
     public class Program
     {
+        static byte[] HexToBytes(string hex)
+        {
+            var result = new byte[hex.Length / 2];
+            var count = 0;
+            for (var index = 0; index < hex.Length; index += 2)
+            {
+                result[count] = Convert.ToByte(hex.Substring(index, 2), 16);
+                count++;
+            }
+            return result;
+        }
+
         public static void Main(string[] args)
         {
-            Server server = new Server(new IPEndPoint(IPAddress.Any, 5684));
+            var server = new Server(new IPEndPoint(IPAddress.Any, 5684));
             try
             {
-                server.DataReceived += new Server.DataReceivedEventHandler(server_DataReceived);
+                server.DataReceived += new Server.DataReceivedEventHandler(Server_DataReceived);
                 server.PSKIdentities.AddIdentity(Encoding.UTF8.GetBytes("oFIrQFrW8EWcZ5u7eGfrkw"), HexToBytes("7CCDE14A5CF3B71C0C08C8B7F9E5"));
                 server.LoadCertificateFromPem("TestServer.pem");
                 server.RequireClientCertificate = true;
@@ -57,21 +66,6 @@ namespace TestServer
             }
         }
 
-        static byte[] HexToBytes(string hex)
-        {
-            byte[] result = new byte[hex.Length / 2];
-            int count = 0;
-            for (int index = 0; index < hex.Length; index += 2)
-            {
-                result[count] = Convert.ToByte(hex.Substring(index, 2), 16);
-                count++;
-            }
-            return result;
-        }
-
-        static void server_DataReceived(EndPoint endPoint, byte[] data)
-        {
-            Console.Write(Encoding.UTF8.GetString(data));
-        }
+        static void Server_DataReceived(EndPoint endPoint, byte[] data) => Console.Write(Encoding.UTF8.GetString(data));
     }
 }

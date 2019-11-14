@@ -20,280 +20,335 @@
  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ***********************************************************************************************************************/
 
+using DTLS.Net;
+using Org.BouncyCastle.Crypto;
+using Org.BouncyCastle.Crypto.Tls;
+using Org.BouncyCastle.Utilities.IO.Pem;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
-using System.Text;
 using System.Net;
 using System.Net.Sockets;
-using System.IO;
-using Org.BouncyCastle.Crypto.Tls;
-using Org.BouncyCastle.Crypto;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Threading;
-using Org.BouncyCastle.Utilities.IO.Pem;
 
 namespace DTLS
 {
     public class Client
     {
-        public delegate void DataReceivedEventHandler(System.Net.EndPoint endPoint, byte[] data);
+        public delegate void DataReceivedEventHandler(EndPoint endPoint, byte[] data);
         public event DataReceivedEventHandler DataReceived;
 
-        private static Version SupportedVersion = DTLSRecord.Version1_2;
+        private const int MAXPACKETSIZE = 1440;
 
-        private EndPoint _LocalEndPoint;
-        private int _MaxPacketSize = 1440;
+        private static readonly Version _SupportedVersion = DTLSRecord.Version1_0;
+        private readonly ManualResetEvent _TriggerProcessRecords = new ManualResetEvent(false);
+        private readonly ManualResetEvent _Connected = new ManualResetEvent(false);
+        private readonly HandshakeInfo _HandshakeInfo = new HandshakeInfo();
+        private readonly DTLSRecords _Records = new DTLSRecords();
+        private readonly List<byte[]> _FragmentedRecordList = new List<byte[]>();
+
         private Socket _Socket;
-        private List<TCipherSuite> _SupportedCipherSuites;
-
         private bool _Terminate;
-        private ManualResetEvent _TriggerProcessRecords = new ManualResetEvent(false);
         private Thread _ProcessRecordsThread;
-
-
-        private ManualResetEvent _Connected = new ManualResetEvent(false);
-
         private EndPoint _ServerEndPoint;
         private ushort? _ServerEpoch;
         private long _ServerSequenceNumber;
         private ushort? _EncyptedServerEpoch;
-
+        private byte[] _ServerCertificate;
         private ushort _Epoch;
-        private long _SequenceNumber; //realy only 48 bit
         private ushort _MessageSequence;
         private TlsCipher _Cipher;
         private Version _Version;
-
         private bool _SendCertificate;
         private IHandshakeMessage _ClientKeyExchange;
-
         private Certificate _Certificate;
-        private Org.BouncyCastle.Crypto.AsymmetricKeyParameter _PrivateKey;
-
-        private HandshakeInfo _HandshakeInfo = new HandshakeInfo();
-        private DTLSRecords _Records = new DTLSRecords();
-
+        private AsymmetricKeyParameter _PrivateKey;
+        private RSACryptoServiceProvider _PrivateKeyRsa;
+        private bool _IsFragment = false;
         private PSKIdentity _PSKIdentity;
-        private PSKIdentities _PSKIdentities;
 
-        public EndPoint LocalEndPoint
-        {
-            get { return _LocalEndPoint; }
-        }
+        private long _SequenceNumber = -1; //realy only 48 bit
 
-        public PSKIdentities PSKIdentities
-        {
-            get { return _PSKIdentities; }
-        }
+        public EndPoint LocalEndPoint { get; }
 
-        public List<TCipherSuite> SupportedCipherSuites
-        {
-            get
-            {
-                return _SupportedCipherSuites;
-            }
-        }
+        public PSKIdentities PSKIdentities { get; }
+
+        public List<TCipherSuite> SupportedCipherSuites { get; }
+
+        public RSACryptoServiceProvider PublicKey { get; set; }
 
         public Client(EndPoint localEndPoint)
-            : this(localEndPoint, null)
-		{
-            _SupportedCipherSuites = new List<TCipherSuite>();
-		}
+            : this(localEndPoint, new List<TCipherSuite>()) => this.SupportedCipherSuites = new List<TCipherSuite>();
 
         public Client(EndPoint localEndPoint, List<TCipherSuite> supportedCipherSuites)
         {
-            _LocalEndPoint = localEndPoint;
-            _PSKIdentities = new PSKIdentities();
-            _SupportedCipherSuites = supportedCipherSuites;
-            _HandshakeInfo.ClientRandom = new RandomData();
-            _HandshakeInfo.ClientRandom.Generate();
-
+            this.LocalEndPoint = localEndPoint ?? throw new ArgumentNullException(nameof(localEndPoint));
+            this.SupportedCipherSuites = supportedCipherSuites;
+            this.PSKIdentities = new PSKIdentities();
+            this._HandshakeInfo.ClientRandom = new RandomData();
+            this._HandshakeInfo.ClientRandom.Generate();
         }
-
-
+        
         private void ChangeEpoch()
         {
-            _Epoch++;
-            _SequenceNumber = 0;
+            ++this._Epoch;
+            this._SequenceNumber = -1;
         }
 
-        private long NextSequenceNumber()
-        {
-            long result = _SequenceNumber++;
-            return result;
-        }
+        private long NextSequenceNumber() => ++this._SequenceNumber;
 
         private void ProcessHandshake(DTLSRecord record)
         {
-            byte[] data;
-            if (_EncyptedServerEpoch.HasValue && (_EncyptedServerEpoch.Value == record.Epoch))
+            if(record == null)
             {
+                throw new ArgumentNullException(nameof(record));
+            }
 
-                int count = 0;
-                while ((_Cipher == null) && (count < 500))
+            var data = record.Fragment;
+            if (this._EncyptedServerEpoch == record.Epoch)
+            {
+                var count = 0;
+                while ((this._Cipher == null) && (count < 500))
                 {
-                    System.Threading.Thread.Sleep(10);
+                    Thread.Sleep(10);
                     count++;
                 }
 
-                if (_Cipher == null)
-                    throw new Exception();
-
-
-                if (_Cipher != null)
+                if (this._Cipher == null)
                 {
-                    long sequenceNumber = ((long)record.Epoch << 48) + record.SequenceNumber;
-                    data = _Cipher.DecodeCiphertext(sequenceNumber, (byte)TRecordType.Handshake, record.Fragment, 0, record.Fragment.Length);
+                    throw new Exception("Need Cipher for Encrypted Session");
                 }
-                else
-                    data = record.Fragment;
+                
+                var sequenceNumber = ((long)record.Epoch << 48) + record.SequenceNumber;
+                data = this._Cipher.DecodeCiphertext(sequenceNumber, (byte)TRecordType.Handshake, record.Fragment, 0, record.Fragment.Length);
             }
-            else
-                data = record.Fragment;
-
-            using (MemoryStream stream = new MemoryStream(data))
+            
+            using (var tempStream = new MemoryStream(data))
             {
-                HandshakeRecord handshakeRecord = HandshakeRecord.Deserialise(stream);
-                if (handshakeRecord != null)
+                var handshakeRec = HandshakeRecord.Deserialise(tempStream);
+                if (handshakeRec.Length > (handshakeRec.FragmentLength + handshakeRec.FragmentOffset))
                 {
-#if DEBUG
-                    Console.WriteLine(handshakeRecord.MessageType.ToString());
-#endif
-                    switch (handshakeRecord.MessageType)
+                    this._IsFragment = true;
+                    this._FragmentedRecordList.Add(data);
+                    return;
+                }
+                else if (this._IsFragment)
+                {
+                    this._FragmentedRecordList.Add(data);
+                    data = new byte[0];
+                    foreach (var rec in this._FragmentedRecordList)
                     {
-                        case THandshakeType.HelloRequest:
+                        data = data.Concat(rec.Skip(HandshakeRecord.RECORD_OVERHEAD)).ToArray();
+                    }
+
+                    var tempHandshakeRec = new HandshakeRecord()
+                    {
+                        Length = handshakeRec.Length,
+                        MessageSeq = handshakeRec.MessageSeq,
+                        MessageType = handshakeRec.MessageType,
+                        FragmentLength = handshakeRec.Length,
+                        FragmentOffset = 0
+                    };
+
+                    var tempHandshakeBytes = new byte[HandshakeRecord.RECORD_OVERHEAD];
+                    using (var updateStream = new MemoryStream(tempHandshakeBytes))
+                    {
+                        tempHandshakeRec.Serialise(updateStream);
+                    }
+
+                    data = tempHandshakeBytes.Concat(data).ToArray();
+                }
+            }
+
+            using (var stream = new MemoryStream(data))
+            {
+                var handshakeRecord = HandshakeRecord.Deserialise(stream);
+                Console.WriteLine(handshakeRecord.MessageType.ToString());
+                switch (handshakeRecord.MessageType)
+                {
+                    case THandshakeType.HelloRequest:
+                        {
                             break;
-                        case THandshakeType.ClientHello:
+                        }
+                    case THandshakeType.ClientHello:
+                        {
                             break;
-                        case THandshakeType.ServerHello:
-                            ServerHello serverHello = ServerHello.Deserialise(stream);
-                            if (serverHello != null)
-                            {
-                                _ServerEpoch = record.Epoch;
-                                _HandshakeInfo.UpdateHandshakeHash(data);
-                                _HandshakeInfo.CipherSuite = (TCipherSuite)serverHello.CipherSuite;
-                                _HandshakeInfo.ServerRandom = serverHello.Random;
-                                Version version = SupportedVersion;
-                                if (serverHello.ServerVersion < version)
-                                    version = serverHello.ServerVersion;
-                                _Version = version;
-                            }
+                        }
+                    case THandshakeType.ServerHello:
+                        {
+                            var serverHello = ServerHello.Deserialise(stream);
+                            this._HandshakeInfo.UpdateHandshakeHash(data);
+                            this._ServerEpoch = record.Epoch;
+                            this._HandshakeInfo.CipherSuite = (TCipherSuite)serverHello.CipherSuite;
+                            this._HandshakeInfo.ServerRandom = serverHello.Random;
+                            this._Version = serverHello.ServerVersion < this._Version ? serverHello.ServerVersion : _SupportedVersion;
                             break;
-                        case THandshakeType.HelloVerifyRequest:
-                            HelloVerifyRequest helloVerifyRequest = HelloVerifyRequest.Deserialise(stream);
-                            if (helloVerifyRequest != null)
-                            {
-                                _Version = helloVerifyRequest.ServerVersion;
-                                SendHello(helloVerifyRequest.Cookie);
-                            }
+                        }
+                    case THandshakeType.HelloVerifyRequest:
+                        {
+                            var helloVerifyRequest = HelloVerifyRequest.Deserialise(stream);
+                            this._Version = helloVerifyRequest.ServerVersion;
+                            this.SendHello(helloVerifyRequest.Cookie);
                             break;
-                        case THandshakeType.Certificate:
-                            _HandshakeInfo.UpdateHandshakeHash(data);
+                        }
+                    case THandshakeType.Certificate:
+                        {
+                            var cert = Certificate.Deserialise(stream, TCertificateType.X509);
+                            this._HandshakeInfo.UpdateHandshakeHash(data);
+                            this._ServerCertificate = cert.Cert;
                             break;
-                        case THandshakeType.ServerKeyExchange:
-                            _HandshakeInfo.UpdateHandshakeHash(data);
-                            TKeyExchangeAlgorithm keyExchangeAlgorithm = CipherSuites.GetKeyExchangeAlgorithm(_HandshakeInfo.CipherSuite);
+                        }
+                    case THandshakeType.ServerKeyExchange:
+                        {
+                            this._HandshakeInfo.UpdateHandshakeHash(data);
+                            var keyExchangeAlgorithm = CipherSuites.GetKeyExchangeAlgorithm(this._HandshakeInfo.CipherSuite);
                             byte[] preMasterSecret = null;
                             IKeyExchange keyExchange = null;
                             if (keyExchangeAlgorithm == TKeyExchangeAlgorithm.ECDHE_ECDSA)
                             {
-                                ECDHEServerKeyExchange serverKeyExchange = ECDHEServerKeyExchange.Deserialise(stream, _Version);
-                                ECDHEKeyExchange keyExchangeECDHE = new ECDHEKeyExchange();
-                                keyExchangeECDHE.CipherSuite = _HandshakeInfo.CipherSuite;
-                                keyExchangeECDHE.Curve = serverKeyExchange.EllipticCurve;
-                                keyExchangeECDHE.KeyExchangeAlgorithm = keyExchangeAlgorithm;
-                                keyExchangeECDHE.ClientRandom = _HandshakeInfo.ClientRandom;
-                                keyExchangeECDHE.ServerRandom = _HandshakeInfo.ServerRandom;
+                                var serverKeyExchange = ECDHEServerKeyExchange.Deserialise(stream, this._Version);
+                                var keyExchangeECDHE = new ECDHEKeyExchange
+                                {
+                                    CipherSuite = this._HandshakeInfo.CipherSuite,
+                                    Curve = serverKeyExchange.EllipticCurve,
+                                    KeyExchangeAlgorithm = keyExchangeAlgorithm,
+                                    ClientRandom = this._HandshakeInfo.ClientRandom,
+                                    ServerRandom = this._HandshakeInfo.ServerRandom
+                                };
                                 keyExchangeECDHE.GenerateEphemeralKey();
-                                ECDHEClientKeyExchange clientKeyExchange = new ECDHEClientKeyExchange(keyExchangeECDHE.PublicKey);
-                                _ClientKeyExchange = clientKeyExchange;
+                                var clientKeyExchange = new ECDHEClientKeyExchange(keyExchangeECDHE.PublicKey);
+                                this._ClientKeyExchange = clientKeyExchange;
                                 preMasterSecret = keyExchangeECDHE.GetPreMasterSecret(serverKeyExchange.PublicKeyBytes);
                                 keyExchange = keyExchangeECDHE;
                             }
                             else if (keyExchangeAlgorithm == TKeyExchangeAlgorithm.ECDHE_PSK)
                             {
-                                ECDHEPSKServerKeyExchange serverKeyExchange = ECDHEPSKServerKeyExchange.Deserialise(stream, _Version);
-                                ECDHEKeyExchange keyExchangeECDHE = new ECDHEKeyExchange();
-                                keyExchangeECDHE.CipherSuite = _HandshakeInfo.CipherSuite;
-                                keyExchangeECDHE.Curve = serverKeyExchange.EllipticCurve;
-                                keyExchangeECDHE.KeyExchangeAlgorithm = keyExchangeAlgorithm;
-                                keyExchangeECDHE.ClientRandom = _HandshakeInfo.ClientRandom;
-                                keyExchangeECDHE.ServerRandom = _HandshakeInfo.ServerRandom;
+                                var serverKeyExchange = ECDHEPSKServerKeyExchange.Deserialise(stream);
+                                var keyExchangeECDHE = new ECDHEKeyExchange
+                                {
+                                    CipherSuite = this._HandshakeInfo.CipherSuite,
+                                    Curve = serverKeyExchange.EllipticCurve,
+                                    KeyExchangeAlgorithm = keyExchangeAlgorithm,
+                                    ClientRandom = this._HandshakeInfo.ClientRandom,
+                                    ServerRandom = this._HandshakeInfo.ServerRandom
+                                };
                                 keyExchangeECDHE.GenerateEphemeralKey();
-                                ECDHEPSKClientKeyExchange clientKeyExchange = new ECDHEPSKClientKeyExchange(keyExchangeECDHE.PublicKey);
+                                var clientKeyExchange = new ECDHEPSKClientKeyExchange(keyExchangeECDHE.PublicKey);
                                 if (serverKeyExchange.PSKIdentityHint != null)
                                 {
-                                    byte[] key = _PSKIdentities.GetKey(serverKeyExchange.PSKIdentityHint);
+                                    var key = this.PSKIdentities.GetKey(serverKeyExchange.PSKIdentityHint);
                                     if (key != null)
-                                        _PSKIdentity = new PSKIdentity() { Identity = serverKeyExchange.PSKIdentityHint, Key = key };
+                                    {
+                                        this._PSKIdentity = new PSKIdentity() { Identity = serverKeyExchange.PSKIdentityHint, Key = key };
+                                    }
                                 }
-                                if (_PSKIdentity == null)
-                                    _PSKIdentity = _PSKIdentities.GetRandom();
-                                clientKeyExchange.PSKIdentity = _PSKIdentity.Identity;
-                                _ClientKeyExchange = clientKeyExchange;
-                                byte[] otherSecret = keyExchangeECDHE.GetPreMasterSecret(serverKeyExchange.PublicKeyBytes);
-                                preMasterSecret = TLSUtils.GetPSKPreMasterSecret(otherSecret, _PSKIdentity.Key);
+                                if (this._PSKIdentity == null)
+                                {
+                                    this._PSKIdentity = this.PSKIdentities.GetRandom();
+                                }
+
+                                clientKeyExchange.PSKIdentity = this._PSKIdentity.Identity;
+                                this._ClientKeyExchange = clientKeyExchange;
+                                var otherSecret = keyExchangeECDHE.GetPreMasterSecret(serverKeyExchange.PublicKeyBytes);
+                                preMasterSecret = TLSUtils.GetPSKPreMasterSecret(otherSecret, this._PSKIdentity.Key);
                                 keyExchange = keyExchangeECDHE;
                             }
                             else if (keyExchangeAlgorithm == TKeyExchangeAlgorithm.PSK)
                             {
-                                PSKServerKeyExchange serverKeyExchange = PSKServerKeyExchange.Deserialise(stream, _Version);
-                                PSKClientKeyExchange clientKeyExchange = new PSKClientKeyExchange();
+                                var serverKeyExchange = PSKServerKeyExchange.Deserialise(stream);
+                                var clientKeyExchange = new PSKClientKeyExchange();
                                 if (serverKeyExchange.PSKIdentityHint != null)
                                 {
-                                    byte[] key = _PSKIdentities.GetKey(serverKeyExchange.PSKIdentityHint);
+                                    var key = this.PSKIdentities.GetKey(serverKeyExchange.PSKIdentityHint);
                                     if (key != null)
-                                        _PSKIdentity = new PSKIdentity() { Identity = serverKeyExchange.PSKIdentityHint, Key = key };
+                                    {
+                                        this._PSKIdentity = new PSKIdentity() { Identity = serverKeyExchange.PSKIdentityHint, Key = key };
+                                    }
                                 }
-                                if (_PSKIdentity == null)
-                                    _PSKIdentity = _PSKIdentities.GetRandom();
-                                byte[] otherSecret = new byte[_PSKIdentity.Key.Length];
-                                clientKeyExchange.PSKIdentity = _PSKIdentity.Identity;
-                                _ClientKeyExchange = clientKeyExchange;
-                                preMasterSecret = TLSUtils.GetPSKPreMasterSecret(otherSecret, _PSKIdentity.Key);
-                            }
-                            _Cipher = TLSUtils.AssignCipher(preMasterSecret, true, _Version, _HandshakeInfo);
+                                if (this._PSKIdentity == null)
+                                {
+                                    this._PSKIdentity = this.PSKIdentities.GetRandom();
+                                }
 
+                                var otherSecret = new byte[this._PSKIdentity.Key.Length];
+                                clientKeyExchange.PSKIdentity = this._PSKIdentity.Identity;
+                                this._ClientKeyExchange = clientKeyExchange;
+                                preMasterSecret = TLSUtils.GetPSKPreMasterSecret(otherSecret, this._PSKIdentity.Key);
+                            }
+                            this._Cipher = TLSUtils.AssignCipher(preMasterSecret, true, this._Version, this._HandshakeInfo);
                             break;
-                        case THandshakeType.CertificateRequest:
-                            _HandshakeInfo.UpdateHandshakeHash(data);
-                            _SendCertificate = true;
+                        }
+                    case THandshakeType.CertificateRequest:
+                        {
+                            this._HandshakeInfo.UpdateHandshakeHash(data);
+                            this._SendCertificate = true;
                             break;
-                        case THandshakeType.ServerHelloDone:
-                            _HandshakeInfo.UpdateHandshakeHash(data);
-                            if (_Cipher == null)
+                        }
+                    case THandshakeType.ServerHelloDone:
+                        {
+                            this._HandshakeInfo.UpdateHandshakeHash(data);
+                            var keyExchangeAlgorithm = CipherSuites.GetKeyExchangeAlgorithm(this._HandshakeInfo.CipherSuite);
+                            if (this._Cipher == null)
                             {
-                                keyExchangeAlgorithm = CipherSuites.GetKeyExchangeAlgorithm(_HandshakeInfo.CipherSuite);
                                 if (keyExchangeAlgorithm == TKeyExchangeAlgorithm.PSK)
                                 {
-                                    PSKClientKeyExchange clientKeyExchange = new PSKClientKeyExchange();
-                                    _PSKIdentity = _PSKIdentities.GetRandom();
-                                    byte[] otherSecret = new byte[_PSKIdentity.Key.Length];
-                                    clientKeyExchange.PSKIdentity = _PSKIdentity.Identity;
-                                    _ClientKeyExchange = clientKeyExchange;
-                                    preMasterSecret = TLSUtils.GetPSKPreMasterSecret(otherSecret, _PSKIdentity.Key);
-                                    _Cipher = TLSUtils.AssignCipher(preMasterSecret, true, _Version, _HandshakeInfo);
+                                    var clientKeyExchange = new PSKClientKeyExchange();
+                                    this._PSKIdentity = this.PSKIdentities.GetRandom();
+                                    var otherSecret = new byte[this._PSKIdentity.Key.Length];
+                                    clientKeyExchange.PSKIdentity = this._PSKIdentity.Identity;
+                                    this._ClientKeyExchange = clientKeyExchange;
+                                    var preMasterSecret = TLSUtils.GetPSKPreMasterSecret(otherSecret, this._PSKIdentity.Key);
+                                    this._Cipher = TLSUtils.AssignCipher(preMasterSecret, true, this._Version, this._HandshakeInfo);
+                                }
+                                else if (keyExchangeAlgorithm == TKeyExchangeAlgorithm.RSA)
+                                {
+                                    var clientKeyExchange = new RSAClientKeyExchange();
+                                    this._ClientKeyExchange = clientKeyExchange;
+                                    var PreMasterSecret = TLSUtils.GetRsaPreMasterSecret(_SupportedVersion);
+                                    clientKeyExchange.PremasterSecret = TLSUtils.GetEncryptedRsaPreMasterSecret(this._ServerCertificate, PreMasterSecret);
+                                    this._Cipher = TLSUtils.AssignCipher(PreMasterSecret, true, this._Version, this._HandshakeInfo);
+                                }
+                                else
+                                {
+                                    throw new NotImplementedException($"Key Exchange Algorithm {keyExchangeAlgorithm} Not Implemented");
                                 }
                             }
 
-                            if (_SendCertificate)
+                            if (this._SendCertificate)
                             {
-                                SendHandshakeMessage(_Certificate, false);
+                                this.SendHandshakeMessage(this._Certificate, false);
                             }
-                            SendHandshakeMessage(_ClientKeyExchange, false);
-                            if (_SendCertificate)
+
+                            this.SendHandshakeMessage(this._ClientKeyExchange, false);
+
+                            if (this._SendCertificate)
                             {
-                                CertificateVerify certificateVerify = new CertificateVerify();
-                                byte[] signatureHash = _HandshakeInfo.GetHash();
-                                certificateVerify.SignatureHashAlgorithm = new SignatureHashAlgorithm() { Signature = TSignatureAlgorithm.ECDSA, Hash = THashAlgorithm.SHA256 };
-                                certificateVerify.Signature = TLSUtils.Sign(_PrivateKey, true, _Version, _HandshakeInfo, certificateVerify.SignatureHashAlgorithm, signatureHash);
-                                SendHandshakeMessage(certificateVerify, false);
+                                var signatureHashAlgorithm = new SignatureHashAlgorithm() { Signature = TSignatureAlgorithm.ECDSA, Hash = THashAlgorithm.SHA256 };
+                                if (keyExchangeAlgorithm == TKeyExchangeAlgorithm.RSA)
+                                {
+                                    signatureHashAlgorithm = new SignatureHashAlgorithm() { Signature = TSignatureAlgorithm.RSA, Hash = THashAlgorithm.SHA1 };
+                                }
+
+                                var certVerify = new CertificateVerify
+                                {
+                                    SignatureHashAlgorithm = signatureHashAlgorithm,
+                                    Signature = TLSUtils.Sign(this._PrivateKey, this._PrivateKeyRsa, true, this._Version, this._HandshakeInfo, signatureHashAlgorithm, this._HandshakeInfo.GetHash(this._Version))
+                                };
+
+                                this.SendHandshakeMessage(certVerify, false);
                             }
-                            SendChangeCipherSpec();
-                            byte[] handshakeHash = _HandshakeInfo.GetHash();
-                            Finished finished = new Finished();
-                            finished.VerifyData = TLSUtils.GetVerifyData(_Version,_HandshakeInfo,true, true, handshakeHash);
-                            SendHandshakeMessage(finished, true);
+
+                            this.SendChangeCipherSpec();
+                            var handshakeHash = this._HandshakeInfo.GetHash(this._Version);
+                            var finished = new Finished
+                            {
+                                VerifyData = TLSUtils.GetVerifyData(this._Version, this._HandshakeInfo, true, true, handshakeHash)
+                            };
+
+                            this.SendHandshakeMessage(finished, true);
 #if DEBUG
                             Console.Write("Handshake Hash:");
                             TLSUtils.WriteToConsole(handshakeHash);
@@ -301,133 +356,144 @@ namespace DTLS
                             TLSUtils.WriteToConsole(finished.VerifyData);
 #endif
                             break;
-                        case THandshakeType.CertificateVerify:
+                        }
+                    case THandshakeType.NewSessionTicket:
+                        {
+                            this._HandshakeInfo.UpdateHandshakeHash(data);
                             break;
-                        case THandshakeType.ClientKeyExchange:
+                        }
+                    case THandshakeType.CertificateVerify:
+                        {
                             break;
-                        case THandshakeType.Finished:
-                            Finished serverFinished = Finished.Deserialise(stream);
-                            handshakeHash = _HandshakeInfo.GetHash();
-                            byte[] calculatedVerifyData = TLSUtils.GetVerifyData(_Version,_HandshakeInfo, true, false, handshakeHash);
-#if DEBUG
+                        }
+                    case THandshakeType.ClientKeyExchange:
+                        {
+                            break;
+                        }
+                    case THandshakeType.Finished:
+                        {
+                            var serverFinished = Finished.Deserialise(stream);
+                            var handshakeHash = this._HandshakeInfo.GetHash(this._Version);
+                            var calculatedVerifyData = TLSUtils.GetVerifyData(this._Version, this._HandshakeInfo, true, false, handshakeHash);
+
                             Console.Write("Recieved Verify:");
                             TLSUtils.WriteToConsole(serverFinished.VerifyData);
                             Console.Write("Calc Verify:");
                             TLSUtils.WriteToConsole(calculatedVerifyData);
-#endif
-                            if (TLSUtils.ByteArrayCompare(serverFinished.VerifyData, calculatedVerifyData))
+                            if (serverFinished.VerifyData.SequenceEqual(calculatedVerifyData))
                             {
-#if DEBUG
                                 Console.WriteLine("Handshake Complete");
-#endif
-                                _Connected.Set();
+                                this._Connected.Set();
                             }
                             break;
-                        default:
+                        }
+                    default:
+                        {
                             break;
-                    }
+                        }
                 }
             }
+
+            this._IsFragment = false;
+            this._FragmentedRecordList.RemoveAll(x => true);
         }
 
         private void ProcessRecord(DTLSRecord record)
         {
             try
             {
-#if DEBUG
-            Console.WriteLine(record.RecordType.ToString());
-#endif
+                Console.WriteLine(record.RecordType.ToString());
                 switch (record.RecordType)
                 {
                     case TRecordType.ChangeCipherSpec:
-                        if (_ServerEpoch.HasValue)
                         {
-                            _ServerEpoch++;
-                            _ServerSequenceNumber = 0;
-                            _EncyptedServerEpoch = _ServerEpoch;
+                            if (this._ServerEpoch.HasValue)
+                            {
+                                this._ServerEpoch++;
+                                this._ServerSequenceNumber = 0;
+                                this._EncyptedServerEpoch = this._ServerEpoch;
+                            }
+                            break;
                         }
-                        break;
                     case TRecordType.Alert:
-                        AlertRecord alertRecord;
-                        try
                         {
-                            if ((_Cipher == null) || (!_EncyptedServerEpoch.HasValue))
+                            AlertRecord alertRecord;
+                            try
                             {
-                                alertRecord = AlertRecord.Deserialise(record.Fragment);
+                                if ((this._Cipher == null) || (!this._EncyptedServerEpoch.HasValue))
+                                {
+                                    alertRecord = AlertRecord.Deserialise(record.Fragment);
+                                }
+                                else
+                                {
+                                    var sequenceNumber = ((long)record.Epoch << 48) + record.SequenceNumber;
+                                    var data = this._Cipher.DecodeCiphertext(sequenceNumber, (byte)TRecordType.Alert, record.Fragment, 0, record.Fragment.Length);
+                                    alertRecord = AlertRecord.Deserialise(data);
+                                }
                             }
-                            else
+                            catch
                             {
-                                long sequenceNumber = ((long)record.Epoch << 48) + record.SequenceNumber;
-                                byte[] data = _Cipher.DecodeCiphertext(sequenceNumber, (byte)TRecordType.Alert, record.Fragment, 0, record.Fragment.Length);
-                                alertRecord = AlertRecord.Deserialise(data);
+                                alertRecord = new AlertRecord
+                                {
+                                    AlertLevel = TAlertLevel.Fatal
+                                };
                             }
-                        }
-                        catch
-                        {
-                            alertRecord = new AlertRecord();
-                            alertRecord.AlertLevel = TAlertLevel.Fatal;
-                        }
-                        if (alertRecord.AlertLevel == TAlertLevel.Fatal)
-                        {
-                            _Connected.Set();
-                            //Terminate
-                        }
-                        else if ((alertRecord.AlertLevel == TAlertLevel.Warning) || (alertRecord.AlertDescription == TAlertDescription.CloseNotify))
-                        {
-                            if (alertRecord.AlertDescription == TAlertDescription.CloseNotify)
+                            if (alertRecord.AlertLevel == TAlertLevel.Fatal)
                             {
-                                SendAlert(TAlertLevel.Warning, TAlertDescription.CloseNotify);
-                                _Connected.Set();
+                                this._Connected.Set();
                             }
-                            //_Sessions.Remove(session, address);
+                            else if ((alertRecord.AlertLevel == TAlertLevel.Warning) || (alertRecord.AlertDescription == TAlertDescription.CloseNotify))
+                            {
+                                if (alertRecord.AlertDescription == TAlertDescription.CloseNotify)
+                                {
+                                    this.SendAlert(TAlertLevel.Warning, TAlertDescription.CloseNotify);
+                                    this._Connected.Set();
+                                }
+                            }
+                            break;
                         }
-                        break;
                     case TRecordType.Handshake:
-                        ProcessHandshake(record);
-                        _ServerSequenceNumber = record.SequenceNumber + 1;
-                        break;
-                    case TRecordType.ApplicationData:
-                        if (_Cipher != null)
                         {
-                            long sequenceNumber = ((long)record.Epoch << 48) + record.SequenceNumber;
-                            byte[] data = _Cipher.DecodeCiphertext(sequenceNumber, (byte)TRecordType.ApplicationData, record.Fragment, 0, record.Fragment.Length);
-                            if (DataReceived != null)
-                            {
-                                DataReceived(record.RemoteEndPoint, data);
-                            }
+                            this.ProcessHandshake(record);
+                            this._ServerSequenceNumber = record.SequenceNumber + 1;
+                            break;
                         }
-                        _ServerSequenceNumber = record.SequenceNumber + 1;
-                        break;
+                    case TRecordType.ApplicationData:
+                        {
+                            if (this._Cipher != null)
+                            {
+                                var sequenceNumber = ((long)record.Epoch << 48) + record.SequenceNumber;
+                                var data = this._Cipher.DecodeCiphertext(sequenceNumber, (byte)TRecordType.ApplicationData, record.Fragment, 0, record.Fragment.Length);
+                                DataReceived?.Invoke(record.RemoteEndPoint, data);
+                            }
+                            this._ServerSequenceNumber = record.SequenceNumber + 1;
+                            break;
+                        }
                     default:
                         break;
                 }
             }
-#if DEBUG
             catch (Exception ex)
             {
                 Console.WriteLine(ex.ToString());
-#else
-            catch
-            {
-#endif
             }
         }
 
         private void ProcessRecords()
         {
-            while (!_Terminate)
+            while (!this._Terminate)
             {
-                _TriggerProcessRecords.Reset();
-                DTLSRecord record = _Records.PeekRecord();
+                this._TriggerProcessRecords.Reset();
+                var record = this._Records.PeekRecord();
                 while (record != null)
                 {
-                    if (_ServerEpoch.HasValue)
+                    if (this._ServerEpoch.HasValue)
                     {
-                        if ((_ServerSequenceNumber == record.SequenceNumber) && (_ServerEpoch == record.Epoch))
+                        if ((this._ServerSequenceNumber == record.SequenceNumber) && (this._ServerEpoch == record.Epoch))
                         {
-                            _Records.RemoveRecord();
-                            ProcessRecord(record);
-                            record = _Records.PeekRecord();
+                            this._Records.RemoveRecord();
+                            this.ProcessRecord(record);
+                            record = this._Records.PeekRecord();
                         }
                         else
                         {
@@ -436,66 +502,60 @@ namespace DTLS
                     }
                     else
                     {
-                        _Records.RemoveRecord();
-                        ProcessRecord(record);
-                        record = _Records.PeekRecord();
+                        this._Records.RemoveRecord();
+                        this.ProcessRecord(record);
+                        record = this._Records.PeekRecord();
                     }
                 }
-                if (!_Terminate)
-                    _TriggerProcessRecords.WaitOne();
+                if (!this._Terminate)
+                {
+                    this._TriggerProcessRecords.WaitOne();
+                }
             }
         }
-
 
         private void ReceiveCallback(object sender, SocketAsyncEventArgs e)
         {
             if (e.BytesTransferred == 0)
             {
-
+                //do nothing?
+                return;
             }
-            else
+
+            var count = e.BytesTransferred;
+            var data = new byte[count];
+            Buffer.BlockCopy(e.Buffer, 0, data, 0, count);
+            var stream = new MemoryStream(data);
+            while (stream.Position < stream.Length)
             {
-                int count = e.BytesTransferred;
-                byte[] data = new byte[count];
-                Buffer.BlockCopy(e.Buffer, 0, data, 0, count);
-                MemoryStream stream = new MemoryStream(data);
-                while (stream.Position < stream.Length)
-                {
-                    DTLSRecord record = DTLSRecord.Deserialise(stream);
-                    if (record != null)
-                    {
-                        record.RemoteEndPoint = e.RemoteEndPoint;
-                        _Records.Add(record);
-                        _TriggerProcessRecords.Set();
-                    }
-                }
-                Socket socket = sender as Socket;
-                if (socket != null)
-                {
-                    System.Net.EndPoint remoteEndPoint;
-                    if (socket.AddressFamily == AddressFamily.InterNetwork)
-                        remoteEndPoint = new IPEndPoint(IPAddress.Any, 0);
-                    else
-                        remoteEndPoint = new IPEndPoint(IPAddress.IPv6Any, 0);
-                    e.RemoteEndPoint = remoteEndPoint;
-                    e.SetBuffer(0, 4096);
-                    socket.ReceiveFromAsync(e);
-                }
+                var record = DTLSRecord.Deserialise(stream);
+                record.RemoteEndPoint = e.RemoteEndPoint;
+                this._Records.Add(record);
+                this._TriggerProcessRecords.Set();
+            }
+
+            if (sender is Socket socket)
+            {
+                var remoteEndPoint = socket.AddressFamily == AddressFamily.InterNetwork ? new IPEndPoint(IPAddress.Any, 0) : (EndPoint)new IPEndPoint(IPAddress.IPv6Any, 0);
+                e.RemoteEndPoint = remoteEndPoint;
+                e.SetBuffer(0, 4096);
+                socket.ReceiveFromAsync(e);
             }
         }
 
         private Socket SetupSocket(AddressFamily addressFamily)
         {
-            Socket result = new Socket(addressFamily, SocketType.Dgram, ProtocolType.Udp);
+            var result = new Socket(addressFamily, SocketType.Dgram, ProtocolType.Udp);
             if (addressFamily == AddressFamily.InterNetworkV6)
             {
                 result.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, true);
             }
+
             if (Environment.OSVersion.Platform != PlatformID.Unix)
             {
                 // do not throw SocketError.ConnectionReset by ignoring ICMP Port Unreachable
-                const Int32 SIO_UDP_CONNRESET = -1744830452;
-                result.IOControl(SIO_UDP_CONNRESET, new Byte[] { 0 }, null);
+                const int SIO_UDP_CONNRESET = -1744830452;
+                result.IOControl(SIO_UDP_CONNRESET, new byte[] { 0 }, null);
             }
             return result;
         }
@@ -503,108 +563,269 @@ namespace DTLS
 
         public void Send(byte[] data)
         {
+            if(this._Socket == null)
+            {
+                throw new Exception("Socket cannot be null");
+            }
+
             try
             {
-                DTLSRecord record = new DTLSRecord();
-                record.RecordType = TRecordType.ApplicationData;
-                record.Epoch = _Epoch;
-                record.SequenceNumber = NextSequenceNumber();
-                if (_Version != null)
-                    record.Version = _Version;
-                long sequenceNumber = ((long)record.Epoch << 48) + record.SequenceNumber;
-                record.Fragment = _Cipher.EncodePlaintext(sequenceNumber, (byte)TRecordType.ApplicationData, data, 0, data.Length);
-                int responseSize = DTLSRecord.RECORD_OVERHEAD + record.Fragment.Length;
-                byte[] response = new byte[responseSize];
-                using (MemoryStream stream = new MemoryStream(response))
+                var record = new DTLSRecord
+                {
+                    RecordType = TRecordType.ApplicationData,
+                    Epoch = _Epoch,
+                    SequenceNumber = this.NextSequenceNumber()
+                };
+
+                if (this._Version != null)
+                {
+                    record.Version = this._Version;
+                }
+
+                var sequenceNumber = ((long)record.Epoch << 48) + record.SequenceNumber;
+                record.Fragment = this._Cipher.EncodePlaintext(sequenceNumber, (byte)TRecordType.ApplicationData, data, 0, data.Length);
+
+                var responseSize = DTLSRecord.RECORD_OVERHEAD + record.Fragment.Length;
+                var response = new byte[responseSize];
+                using (var stream = new MemoryStream(response))
                 {
                     record.Serialise(stream);
                 }
-                SocketAsyncEventArgs parameters = new SocketAsyncEventArgs()
+
+                var parameters = new SocketAsyncEventArgs()
                 {
                     RemoteEndPoint = _ServerEndPoint
                 };
+
                 parameters.SetBuffer(response, 0, responseSize);
-                if (_Socket != null)
-                    _Socket.SendToAsync(parameters);
+                this._Socket.SendToAsync(parameters);
             }
-#if DEBUG
             catch (Exception ex)
             {
                 Console.WriteLine(ex.ToString());
-#else
-            catch
-            {
-#endif
-
             }
         }
 
         private void SendAlert(TAlertLevel alertLevel, TAlertDescription alertDescription)
         {
-            DTLSRecord record = new DTLSRecord();
-            record.RecordType = TRecordType.Alert;
-            record.Epoch = _Epoch;
-            record.SequenceNumber = NextSequenceNumber();
-            if (_Version != null)
-                record.Version = _Version;
-            long sequenceNumber = ((long)record.Epoch << 48) + record.SequenceNumber;
+            var record = new DTLSRecord
+            {
+                RecordType = TRecordType.Alert,
+                Epoch = _Epoch,
+                SequenceNumber = this.NextSequenceNumber()
+            };
 
-            byte[] data = new byte[2];
+            if (this._Version != null)
+            {
+                record.Version = this._Version;
+            }
+
+            var sequenceNumber = ((long)record.Epoch << 48) + record.SequenceNumber;
+
+            var data = new byte[2];
             data[0] = (byte)alertLevel;
             data[1] = (byte)alertDescription;
-            if (_Cipher == null)
-                record.Fragment = data;
-            else
-                record.Fragment = _Cipher.EncodePlaintext(sequenceNumber, (byte)TRecordType.ApplicationData, data, 0, data.Length);
-            int responseSize = DTLSRecord.RECORD_OVERHEAD + record.Fragment.Length;
-            byte[] response = new byte[responseSize];
-            using (MemoryStream stream = new MemoryStream(response))
+            record.Fragment = this._Cipher == null ? data : this._Cipher.EncodePlaintext(sequenceNumber, (byte)TRecordType.ApplicationData, data, 0, data.Length);
+            var responseSize = DTLSRecord.RECORD_OVERHEAD + record.Fragment.Length;
+            var response = new byte[responseSize];
+            using (var stream = new MemoryStream(response))
             {
                 record.Serialise(stream);
             }
-            SocketAsyncEventArgs parameters = new SocketAsyncEventArgs()
+            var parameters = new SocketAsyncEventArgs()
             {
                 RemoteEndPoint = _ServerEndPoint
             };
             parameters.SetBuffer(response, 0, responseSize);
-            _Socket.SendToAsync(parameters);
+            this._Socket.SendToAsync(parameters);
         }
 
         private void SendChangeCipherSpec()
         {
-            int size = 1;
-            int responseSize = DTLSRecord.RECORD_OVERHEAD + size;
-            byte[] response = new byte[responseSize];
-            DTLSRecord record = new DTLSRecord();
-            record.RecordType = TRecordType.ChangeCipherSpec;
-            record.Epoch = _Epoch;
-            record.SequenceNumber = NextSequenceNumber();
-            record.Fragment = new byte[size];
-            record.Fragment[0] = 1;
-            if (_Version != null)
-                record.Version = _Version;
-            using (MemoryStream stream = new MemoryStream(response))
-            {
-                record.Serialise(stream);
-            }
-            SocketAsyncEventArgs parameters = new SocketAsyncEventArgs()
+            var message = this.GetChangeCipherSpec();
+            var parameters = new SocketAsyncEventArgs()
             {
                 RemoteEndPoint = _ServerEndPoint
             };
-            parameters.SetBuffer(response, 0, responseSize);
-            _Socket.SendToAsync(parameters);
-            ChangeEpoch();
+
+            parameters.SetBuffer(message, 0, message.Length);
+            this._Socket.SendToAsync(parameters);
+            this.ChangeEpoch();
+        }
+
+        private byte[] GetChangeCipherSpec()
+        {
+            var size = 1;
+            var responseSize = DTLSRecord.RECORD_OVERHEAD + size;
+            var response = new byte[responseSize];
+            var record = new DTLSRecord
+            {
+                RecordType = TRecordType.ChangeCipherSpec,
+                Epoch = _Epoch,
+                SequenceNumber = this.NextSequenceNumber(),
+                Fragment = new byte[size]
+            };
+
+            record.Fragment[0] = 1;
+            if (this._Version != null)
+            {
+                record.Version = this._Version;
+            }
+
+            using (var stream = new MemoryStream(response))
+            {
+                record.Serialise(stream);
+            }
+            return response;
+        }
+
+        private byte[] GetBytes(IHandshakeMessage handshakeMessage, bool encrypt)
+        {
+            var size = handshakeMessage.CalculateSize(this._Version);
+            var maxPayloadSize = MAXPACKETSIZE - DTLSRecord.RECORD_OVERHEAD + HandshakeRecord.RECORD_OVERHEAD;
+
+            if (size > maxPayloadSize)
+            {
+                var wholeMessage = new byte[0];
+
+                var record = new DTLSRecord
+                {
+                    RecordType = TRecordType.Handshake,
+                    Epoch = _Epoch
+                };
+                if (this._Version != null)
+                {
+                    record.Version = this._Version;
+                }
+
+                var handshakeRecord = new HandshakeRecord
+                {
+                    MessageType = handshakeMessage.MessageType,
+                    MessageSeq = _MessageSequence
+                };
+
+                if (!(handshakeMessage.MessageType == THandshakeType.HelloVerifyRequest
+                   || (handshakeMessage.MessageType == THandshakeType.ClientHello && (handshakeMessage as ClientHello).Cookie == null)))
+                {
+                    record.Fragment = new byte[HandshakeRecord.RECORD_OVERHEAD + size];
+                    handshakeRecord.Length = (uint)size;
+                    handshakeRecord.FragmentLength = (uint)size;
+                    handshakeRecord.FragmentOffset = 0u;
+                    using (var stream = new MemoryStream(record.Fragment))
+                    {
+                        handshakeRecord.Serialise(stream);
+                        handshakeMessage.Serialise(stream, this._Version);
+                    }
+
+                    this._HandshakeInfo.UpdateHandshakeHash(record.Fragment);
+                }
+
+                var dataMessage = new byte[size];
+                using (var stream = new MemoryStream(dataMessage))
+                {
+                    handshakeMessage.Serialise(stream, this._Version);
+                }
+
+                var dataMessageFragments = dataMessage.ChunkBySize(maxPayloadSize);
+                handshakeRecord.FragmentOffset = 0U;
+                dataMessageFragments.ForEach(x =>
+                {
+                    handshakeRecord.Length = (uint)size;
+                    handshakeRecord.FragmentLength = (uint)x.Count();
+                    record.SequenceNumber = this.NextSequenceNumber();
+
+                    var baseMessage = new byte[HandshakeRecord.RECORD_OVERHEAD];
+                    using (var stream = new MemoryStream(baseMessage))
+                    {
+                        handshakeRecord.Serialise(stream);
+                    }
+
+                    record.Fragment = baseMessage.Concat(x).ToArray();
+
+                    var responseSize = DTLSRecord.RECORD_OVERHEAD + HandshakeRecord.RECORD_OVERHEAD + x.Count();
+                    if ((this._Cipher != null) && encrypt)
+                    {
+                        var sequenceNumber = ((long)record.Epoch << 48) + record.SequenceNumber;
+                        record.Fragment = this._Cipher.EncodePlaintext(sequenceNumber, (byte)TRecordType.Handshake, record.Fragment, 0, record.Fragment.Length);
+                        responseSize = DTLSRecord.RECORD_OVERHEAD + record.Fragment.Length;
+                    }
+                    var response = new byte[responseSize];
+                    using (var stream = new MemoryStream(response))
+                    {
+                        record.Serialise(stream);
+                    }
+
+                    wholeMessage = wholeMessage.Concat(response).ToArray();
+                    handshakeRecord.FragmentOffset += (uint)x.Count();
+                });
+
+                this._MessageSequence++;
+                return wholeMessage;
+            }
+            else
+            {
+                var record = new DTLSRecord
+                {
+                    RecordType = TRecordType.Handshake,
+                    Epoch = _Epoch,
+                    SequenceNumber = this.NextSequenceNumber(),
+                    Fragment = new byte[HandshakeRecord.RECORD_OVERHEAD + size]
+                };
+                if (this._Version != null)
+                {
+                    record.Version = this._Version;
+                }
+
+                var handshakeRecord = new HandshakeRecord
+                {
+                    MessageType = handshakeMessage.MessageType,
+                    MessageSeq = _MessageSequence
+                };
+                this._MessageSequence++;
+                handshakeRecord.Length = (uint)size;
+                handshakeRecord.FragmentLength = (uint)size;
+                using (var stream = new MemoryStream(record.Fragment))
+                {
+                    handshakeRecord.Serialise(stream);
+                    handshakeMessage.Serialise(stream, this._Version);
+                }
+
+                if (!(handshakeMessage.MessageType == THandshakeType.HelloVerifyRequest
+                   || (handshakeMessage.MessageType == THandshakeType.ClientHello && (handshakeMessage as ClientHello).Cookie == null)))
+                {
+                    this._HandshakeInfo.UpdateHandshakeHash(record.Fragment);
+                }
+
+                var responseSize = DTLSRecord.RECORD_OVERHEAD + HandshakeRecord.RECORD_OVERHEAD + size;
+                if ((this._Cipher != null) && encrypt)
+                {
+                    var sequenceNumber = ((long)record.Epoch << 48) + record.SequenceNumber;
+                    record.Fragment = this._Cipher.EncodePlaintext(sequenceNumber, (byte)TRecordType.Handshake, record.Fragment, 0, record.Fragment.Length);
+                    responseSize = DTLSRecord.RECORD_OVERHEAD + record.Fragment.Length;
+                }
+
+                var response = new byte[responseSize];
+                using (var stream = new MemoryStream(response))
+                {
+                    record.Serialise(stream);
+                }
+
+                return response;
+            }
         }
 
         private void SendHello(byte[] cookie)
         {
-            ClientHello clientHello = new ClientHello();
-            clientHello.ClientVersion = SupportedVersion;
-            clientHello.Random = _HandshakeInfo.ClientRandom;
-            clientHello.Cookie = cookie;
-            ushort[] cipherSuites = new ushort[_SupportedCipherSuites.Count];
-            int index = 0;
-            foreach (TCipherSuite item in _SupportedCipherSuites)
+            var clientHello = new ClientHello
+            {
+                ClientVersion = _SupportedVersion,
+                Random = this._HandshakeInfo.ClientRandom,
+                Cookie = cookie
+            };
+
+            var cipherSuites = new ushort[this.SupportedCipherSuites.Count];
+            var index = 0;
+            foreach (var item in this.SupportedCipherSuites)
             {
                 cipherSuites[index] = (ushort)item;
                 index++;
@@ -612,13 +833,16 @@ namespace DTLS
             clientHello.CipherSuites = cipherSuites;
             clientHello.CompressionMethods = new byte[1];
             clientHello.CompressionMethods[0] = 0;
-            clientHello.Extensions = new Extensions();
 
-            clientHello.Extensions.Add(new Extension() {  ExtensionType = TExtensionType.EncryptThenMAC});
-            clientHello.Extensions.Add(new Extension() { ExtensionType = TExtensionType.ExtendedMasterSecret });
+            clientHello.Extensions = new Extensions
+            {
+                new Extension() { ExtensionType = TExtensionType.SessionTicketTLS },
+                //new Extension() { ExtensionType = TExtensionType.EncryptThenMAC },
+                //new Extension() { ExtensionType = TExtensionType.ExtendedMasterSecret },
+            };
 
-            EllipticCurvesExtension ellipticCurvesExtension = new EllipticCurvesExtension();
-            for (int curve = 0; curve < (int)TEllipticCurve.secp521r1; curve++)
+            var ellipticCurvesExtension = new EllipticCurvesExtension();
+            for (var curve = 0; curve < (int)TEllipticCurve.secp521r1; curve++)
             {
                 if (EllipticCurveFactory.SupportedCurve((TEllipticCurve)curve))
                 {
@@ -627,118 +851,91 @@ namespace DTLS
                 }
             }
             clientHello.Extensions.Add(new Extension(ellipticCurvesExtension));
-            EllipticCurvePointFormatsExtension cllipticCurvePointFormatsExtension = new EllipticCurvePointFormatsExtension();
+            var cllipticCurvePointFormatsExtension = new EllipticCurvePointFormatsExtension();
             cllipticCurvePointFormatsExtension.SupportedPointFormats.Add(TEllipticCurvePointFormat.Uncompressed);
             clientHello.Extensions.Add(new Extension(cllipticCurvePointFormatsExtension));
-            SignatureAlgorithmsExtension signatureAlgorithmsExtension = new SignatureAlgorithmsExtension();
-            signatureAlgorithmsExtension.SupportedAlgorithms.Add(new SignatureHashAlgorithm() { Hash= THashAlgorithm.SHA256, Signature = TSignatureAlgorithm.ECDSA });
+            var signatureAlgorithmsExtension = new SignatureAlgorithmsExtension();
+            signatureAlgorithmsExtension.SupportedAlgorithms.Add(new SignatureHashAlgorithm() { Hash = THashAlgorithm.SHA1, Signature = TSignatureAlgorithm.RSA });
             clientHello.Extensions.Add(new Extension(signatureAlgorithmsExtension));
-            _HandshakeInfo.InitaliseHandshakeHash(false);
-            SendHandshakeMessage(clientHello, false);
+            this.SendHandshakeMessage(clientHello, false);
         }
 
         private void SendHandshakeMessage(IHandshakeMessage handshakeMessage, bool encrypt)
         {
-            int size = handshakeMessage.CalculateSize(_Version);
-            int maxPayloadSize = _MaxPacketSize - DTLSRecord.RECORD_OVERHEAD + HandshakeRecord.RECORD_OVERHEAD;
-            if (size > maxPayloadSize)
+            var bytes = this.GetBytes(handshakeMessage, encrypt);
+            var parameters = new SocketAsyncEventArgs()
             {
-
-            }
-            else
-            {
-
-                DTLSRecord record = new DTLSRecord();
-                record.RecordType = TRecordType.Handshake;
-                record.Epoch = _Epoch;
-                record.SequenceNumber = NextSequenceNumber();
-                record.Fragment = new byte[HandshakeRecord.RECORD_OVERHEAD + size];
-                if (_Version != null)
-                    record.Version = _Version;
-                HandshakeRecord handshakeRecord = new HandshakeRecord();
-                handshakeRecord.MessageType = handshakeMessage.MessageType;
-                handshakeRecord.MessageSeq = _MessageSequence;
-                _MessageSequence++;
-                handshakeRecord.Length = (uint)size;
-                handshakeRecord.FragmentLength = (uint)size;
-                using (MemoryStream stream = new MemoryStream(record.Fragment))
-                {
-                    handshakeRecord.Serialise(stream);
-                    handshakeMessage.Serialise(stream, _Version);
-                }
-                if (handshakeMessage.MessageType != THandshakeType.HelloVerifyRequest)
-                {
-                    _HandshakeInfo.UpdateHandshakeHash(record.Fragment);
-                }
-                int responseSize = DTLSRecord.RECORD_OVERHEAD + HandshakeRecord.RECORD_OVERHEAD + size;
-                if ((_Cipher != null) && encrypt)
-                {
-                    long sequenceNumber = ((long)record.Epoch << 48) + record.SequenceNumber;
-                    record.Fragment = _Cipher.EncodePlaintext(sequenceNumber, (byte)TRecordType.Handshake, record.Fragment, 0, record.Fragment.Length);
-                    responseSize = DTLSRecord.RECORD_OVERHEAD + record.Fragment.Length;
-                }
-                byte[] response = new byte[responseSize];
-                using (MemoryStream stream = new MemoryStream(response))
-                {
-                    record.Serialise(stream);
-                }
-                SocketAsyncEventArgs parameters = new SocketAsyncEventArgs()
-                {
-                    RemoteEndPoint = _ServerEndPoint
-                };
-                parameters.SetBuffer(response, 0, responseSize);
-                _Socket.SendToAsync(parameters);
-            }
-
-
+                RemoteEndPoint = _ServerEndPoint
+            };
+            parameters.SetBuffer(bytes, 0, bytes.Length);
+            this._Socket.SendToAsync(parameters);
         }
 
         public void ConnectToServer(EndPoint serverEndPoint)
         {
-            ConnectToServerAsync(serverEndPoint);
-            _Connected.WaitOne();
+            this.ConnectToServerAsync(serverEndPoint);
+            this._Connected.WaitOne();
         }
 
         public void ConnectToServerAsync(EndPoint serverEndPoint)
         {
-            _ServerEndPoint = serverEndPoint;
-            if (_SupportedCipherSuites.Count == 0)
+            this._ServerEndPoint = serverEndPoint;
+            if (this.SupportedCipherSuites.Count == 0)
             {
-                _SupportedCipherSuites.Add(TCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8); //Test 1.2
-                _SupportedCipherSuites.Add(TCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256); //Tested 1.0 1.2
-                _SupportedCipherSuites.Add(TCipherSuite.TLS_PSK_WITH_AES_128_CCM_8); //Test 1.2
-                _SupportedCipherSuites.Add(TCipherSuite.TLS_PSK_WITH_AES_128_CBC_SHA256); //Tested 1.0 1.2
-                _SupportedCipherSuites.Add(TCipherSuite.TLS_ECDHE_PSK_WITH_AES_128_CBC_SHA256); //Tested 1.0 1.2
-            }
-            _Socket = SetupSocket(_LocalEndPoint.AddressFamily);
-            if (_Socket != null)
-            {
-                _Socket.Bind(_LocalEndPoint);
-                _ProcessRecordsThread = new Thread(new ThreadStart(ProcessRecords));
-                if (_ProcessRecordsThread.Name == null)
-                    _ProcessRecordsThread.Name = "ProcessRecordsThread";
-                _ProcessRecordsThread.IsBackground = true;
-                _ProcessRecordsThread.Start();
-                StartReceive(_Socket);
-                SendHello(null);
+                this.SupportedCipherSuites.Add(TCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8); //Test 1.2
+                this.SupportedCipherSuites.Add(TCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256); //Tested 1.0 1.2
+                this.SupportedCipherSuites.Add(TCipherSuite.TLS_PSK_WITH_AES_128_CCM_8); //Test 1.2
+                this.SupportedCipherSuites.Add(TCipherSuite.TLS_PSK_WITH_AES_128_CBC_SHA256); //Tested 1.0 1.2
+                this.SupportedCipherSuites.Add(TCipherSuite.TLS_ECDHE_PSK_WITH_AES_128_CBC_SHA256); //Tested 1.0 1.2
+                this.SupportedCipherSuites.Add(TCipherSuite.TLS_RSA_WITH_AES_256_CBC_SHA);
             }
 
+            this._Socket = this.SetupSocket(this.LocalEndPoint.AddressFamily);
+            this._Socket.Bind(this.LocalEndPoint);
+            this._ProcessRecordsThread = new Thread(new ThreadStart(this.ProcessRecords));
+            if (this._ProcessRecordsThread.Name == null)
+            {
+                this._ProcessRecordsThread.Name = "ProcessRecordsThread";
+            }
+
+            this._ProcessRecordsThread.IsBackground = true;
+            this._ProcessRecordsThread.Start();
+            this.StartReceive(this._Socket);
+            this.SendHello(null);
         }
 
+        public void LoadX509Certificate(X509Chain chain)
+        {
+            if (chain == null)
+            {
+                throw new ArgumentNullException(nameof(chain));
+            }
+
+            var mainCert = chain.ChainElements[0].Certificate;
+
+            this._PrivateKeyRsa = (RSACryptoServiceProvider)mainCert.PrivateKey;
+            this.PublicKey = (RSACryptoServiceProvider)mainCert.PublicKey.Key;
+
+            this._Certificate = new Certificate
+            {
+                CertChain = new List<byte[]>() { mainCert.GetRawCertData(), chain.ChainElements[1].Certificate.GetRawCertData() },
+                CertificateType = TCertificateType.X509
+            };
+        }
 
         public void LoadCertificateFromPem(string filename)
         {
-            using (FileStream stream = File.OpenRead(filename))
+            using (var stream = File.OpenRead(filename))
             {
-                LoadCertificateFromPem(stream);
+                this.LoadCertificateFromPem(stream);
             }
         }
 
         public void LoadCertificateFromPem(Stream stream)
         {
-            List<byte[]> chain = new List<byte[]>();
-            PemReader reader = new PemReader(new StreamReader(stream));
-            PemObject pem = reader.ReadPemObject();
+            var chain = new List<byte[]>();
+            var reader = new PemReader(new StreamReader(stream));
+            var pem = reader.ReadPemObject();
 
             while (pem != null)
             {
@@ -748,42 +945,40 @@ namespace DTLS
                 }
                 else if (pem.Type.EndsWith("PRIVATE KEY"))
                 {
-                    _PrivateKey = Certificates.GetPrivateKeyFromPEM(pem);
+                    this._PrivateKey = Certificates.GetPrivateKeyFromPEM(pem);
                 }
                 pem = reader.ReadPemObject();
             }
-            _Certificate = new Certificate();
-            _Certificate.CertChain = chain;
-            _Certificate.CertificateType = TCertificateType.X509;
+            this._Certificate = new Certificate
+            {
+                CertChain = chain,
+                CertificateType = TCertificateType.X509
+            };
         }
 
         private void StartReceive(Socket socket)
         {
-            SocketAsyncEventArgs parameters = new SocketAsyncEventArgs();
-            if (socket.AddressFamily == AddressFamily.InterNetwork)
-                parameters.RemoteEndPoint = new IPEndPoint(IPAddress.Any, 0);
-            else
-                parameters.RemoteEndPoint = new IPEndPoint(IPAddress.IPv6Any, 0);
-            parameters.Completed += new EventHandler<SocketAsyncEventArgs>(ReceiveCallback);
+            var parameters = new SocketAsyncEventArgs
+            {
+                RemoteEndPoint = socket.AddressFamily == AddressFamily.InterNetwork ? new IPEndPoint(IPAddress.Any, 0) : new IPEndPoint(IPAddress.IPv6Any, 0)
+            };
+            parameters.Completed += new EventHandler<SocketAsyncEventArgs>(this.ReceiveCallback);
             parameters.SetBuffer(new byte[4096], 0, 4096);
             socket.ReceiveFromAsync(parameters);
         }
 
-        public void SetVersion(Version version)
-        {
-            _Version = version;
-        }
+        public void SetVersion(Version version) => this._Version = version;
 
         public void Stop()
         {
-            if (_Socket != null)
+            if (this._Socket != null)
             {
-                _Terminate = true;
-                _TriggerProcessRecords.Set();
-                SendAlert(TAlertLevel.Fatal, TAlertDescription.CloseNotify);
+                this._Terminate = true;
+                this._TriggerProcessRecords.Set();
+                this.SendAlert(TAlertLevel.Fatal, TAlertDescription.CloseNotify);
                 Thread.Sleep(100);
-                _Socket.Dispose();
-                _Socket = null;
+                this._Socket.Dispose();
+                this._Socket = null;
             }
         }
 

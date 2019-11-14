@@ -20,15 +20,11 @@
  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ***********************************************************************************************************************/
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 
 namespace DTLS
 {
-	//rfc4492 section 5.1.2
-	internal enum TEllipticCurvePointFormat
+    //rfc4492 section 5.1.2
+    internal enum TEllipticCurvePointFormat
 	{
 		Uncompressed  = 0,
 		AnsiX962CompressedPrime  = 1,

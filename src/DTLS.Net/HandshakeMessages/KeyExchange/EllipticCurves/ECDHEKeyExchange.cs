@@ -20,19 +20,15 @@
  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ***********************************************************************************************************************/
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Crypto.Generators;
 using Org.BouncyCastle.Crypto.Parameters;
-using Org.BouncyCastle.Security;
 using Org.BouncyCastle.Crypto.Tls;
+using Org.BouncyCastle.Security;
+using System;
 
 namespace DTLS
 {
-	internal class ECDHEKeyExchange : IKeyExchange
+    internal class ECDHEKeyExchange : IKeyExchange
 	{
 		public RandomData ClientRandom { get; set; }
 
@@ -40,9 +36,6 @@ namespace DTLS
 
 		public TKeyExchangeAlgorithm KeyExchangeAlgorithm { get; set; }
 
-	
-		
-		
 		public TCipherSuite CipherSuite { get; set; }
 
 		public TEllipticCurve Curve { get; set; }
@@ -53,22 +46,26 @@ namespace DTLS
 
 		public ECPublicKeyParameters PublicKey { get; set; }
 
-
 		public void GenerateEphemeralKey()
 		{
-			EllipticCurveParameters = EllipticCurveFactory.GetEllipticCurveParameters(Curve);
-			ECKeyPairGenerator keyPairGenerator = new ECKeyPairGenerator();
-			SecureRandom random = new SecureRandom();
-			keyPairGenerator.Init(new ECKeyGenerationParameters(EllipticCurveParameters, random));
-			AsymmetricCipherKeyPair keys = keyPairGenerator.GenerateKeyPair();
-			PrivateKey = (ECPrivateKeyParameters)keys.Private;
-			PublicKey = (ECPublicKeyParameters)keys.Public;
+            this.EllipticCurveParameters = EllipticCurveFactory.GetEllipticCurveParameters(this.Curve);
+			var keyPairGenerator = new ECKeyPairGenerator();
+			var random = new SecureRandom();
+			keyPairGenerator.Init(new ECKeyGenerationParameters(this.EllipticCurveParameters, random));
+			var keys = keyPairGenerator.GenerateKeyPair();
+            this.PrivateKey = (ECPrivateKeyParameters)keys.Private;
+            this.PublicKey = (ECPublicKeyParameters)keys.Public;
 		}
 
 		public byte[] GetPreMasterSecret(byte[] encodedPoint)
 		{
-			ECPublicKeyParameters peerPublicKey = TlsEccUtilities.DeserializeECPublicKey(null, EllipticCurveParameters, encodedPoint);
-			return TlsEccUtilities.CalculateECDHBasicAgreement(peerPublicKey, PrivateKey);
+            if(encodedPoint == null)
+            {
+                throw new ArgumentNullException(nameof(encodedPoint));
+            }
+
+			var peerPublicKey = TlsEccUtilities.DeserializeECPublicKey(null, this.EllipticCurveParameters, encodedPoint);
+			return TlsEccUtilities.CalculateECDHBasicAgreement(peerPublicKey, this.PrivateKey);
 		}
 	}
 }

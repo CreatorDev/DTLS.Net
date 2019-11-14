@@ -20,74 +20,77 @@
  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ***********************************************************************************************************************/
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using Org.BouncyCastle.Crypto.Parameters;
+using System;
+using System.IO;
 
 namespace DTLS
 {
-	internal class ECDHEClientKeyExchange : IHandshakeMessage
+    internal class ECDHEClientKeyExchange : IHandshakeMessage
 	{
+        public THandshakeType MessageType => THandshakeType.ClientKeyExchange;
 
-		private byte[] _PublicKeyBytes;
-		
-		public THandshakeType MessageType
+        public byte[] PublicKeyBytes { get; private set; }
+
+
+        public int CalculateSize(Version version)
 		{
-			get { return THandshakeType.ClientKeyExchange; }
-		}
-
-		public byte[] PublicKeyBytes
-		{
-			get { return _PublicKeyBytes; }
-		}
-
-
-		public int CalculateSize(Version version)
-		{
-            int result = 1;
-            if (_PublicKeyBytes != null)
+            var result = 1;
+            if (this.PublicKeyBytes != null)
             {
-                result += _PublicKeyBytes.Length;
+                result += this.PublicKeyBytes.Length;
             }
             return result;
 		}
 
-        public ECDHEClientKeyExchange()
-        {
-
-        }
+        public ECDHEClientKeyExchange() { }
 
         public ECDHEClientKeyExchange(ECPublicKeyParameters publicKey)
         {
-            _PublicKeyBytes = publicKey.Q.GetEncoded();
+            if(publicKey == null)
+            {
+                throw new ArgumentNullException(nameof(publicKey));
+            }
+
+            this.PublicKeyBytes = publicKey.Q.GetEncoded();
         }
 
-		public void Serialise(System.IO.Stream stream, Version version)
+		public void Serialise(Stream stream, Version version)
 		{
-            if (_PublicKeyBytes == null)
+            if(stream == null)
+            {
+                throw new ArgumentNullException(nameof(stream));
+            }
+
+            if (this.PublicKeyBytes == null)
             {
                 stream.WriteByte(0);
+                return;
             }
-            else
-            {
-                stream.WriteByte((byte)_PublicKeyBytes.Length);
-                stream.Write(_PublicKeyBytes, 0, _PublicKeyBytes.Length);
-            }
+
+            stream.WriteByte((byte)this.PublicKeyBytes.Length);
+            stream.Write(this.PublicKeyBytes, 0, this.PublicKeyBytes.Length);
 		}
 
-		public static ECDHEClientKeyExchange Deserialise(System.IO.Stream stream)
+		public static ECDHEClientKeyExchange Deserialise(Stream stream)
 		{
-			ECDHEClientKeyExchange result = null;
-			int length = stream.ReadByte();
+            if (stream == null)
+            {
+                throw new ArgumentNullException(nameof(stream));
+            }
+
+            ECDHEClientKeyExchange result = null;
+			var length = stream.ReadByte();
 			if (length > 0)
 			{
-				result = new ECDHEClientKeyExchange();
-				result._PublicKeyBytes = new byte[length];
-				stream.Read(result._PublicKeyBytes, 0, length);
+                result = new ECDHEClientKeyExchange
+                {
+                    PublicKeyBytes = new byte[length]
+                };
+
+                stream.Read(result.PublicKeyBytes, 0, length);
 			}
-			return result;			
+			return result;
 		}
 	}
 }

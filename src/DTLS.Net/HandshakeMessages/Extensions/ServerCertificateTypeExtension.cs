@@ -21,64 +21,54 @@
 ***********************************************************************************************************************/
 
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.IO;
 
 namespace DTLS
 {
-	//struct {
-	//          select(ClientOrServerExtension) {
-	//              case client:
-	//                CertificateType server_certificate_types<1..2^8-1>;
-	//              case server:
-	//                CertificateType server_certificate_type;
-	//          }
-	//  } ServerCertTypeExtension;
-	internal class ServerCertificateTypeExtension : IExtension
+    //struct {
+    //          select(ClientOrServerExtension) {
+    //              case client:
+    //                CertificateType server_certificate_types<1..2^8-1>;
+    //              case server:
+    //                CertificateType server_certificate_type;
+    //          }
+    //  } ServerCertTypeExtension;
+    internal class ServerCertificateTypeExtension : IExtension
 	{
-		private byte _CertificateType;
+        public TExtensionType ExtensionType => TExtensionType.ServerCertificateType;
 
-		public TExtensionType ExtensionType { get { return TExtensionType.ServerCertificateType; } }
+        public byte CertificateType { get; set; }
 
-		public byte CertificateType
+        public ServerCertificateTypeExtension() { }
+
+        public ServerCertificateTypeExtension(TCertificateType certificateType) => this.CertificateType = (byte)certificateType;
+
+        public int CalculateSize() => 1;
+
+        public static ServerCertificateTypeExtension Deserialise(Stream stream, bool client)
 		{
-			get { return _CertificateType; }
-			set { _CertificateType = value; }
-		}
+            if(stream == null)
+            {
+                throw new ArgumentNullException(nameof(stream));
+            }
 
-		public ServerCertificateTypeExtension()
-		{
-
-		}
-
-		public ServerCertificateTypeExtension(TCertificateType certificateType)
-		{
-			_CertificateType= (byte)certificateType;
-		}
-
-		public int CalculateSize()
-		{
-			int result = 1;
-			return result;
-		}
-
-		public static ServerCertificateTypeExtension Deserialise(Stream stream, bool client)
-		{
-			ServerCertificateTypeExtension result = new ServerCertificateTypeExtension();
-			int certificateType = stream.ReadByte();
+			var result = new ServerCertificateTypeExtension();
+			var certificateType = stream.ReadByte();
 			if (certificateType >= 0)
 			{
-				result._CertificateType = (byte)certificateType;
+				result.CertificateType = (byte)certificateType;
 			}
 			return result;
 		}
 
 		public void Serialise(Stream stream)
 		{
-			stream.WriteByte(_CertificateType);
+            if (stream == null)
+            {
+                throw new ArgumentNullException(nameof(stream));
+            }
+
+            stream.WriteByte(this.CertificateType);
 		}
 	}
-
 }

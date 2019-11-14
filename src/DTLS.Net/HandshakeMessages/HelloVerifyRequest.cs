@@ -21,69 +21,67 @@
 ***********************************************************************************************************************/
 
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.IO;
 
 namespace DTLS
 {
-	
-   //struct {
-   //  ProtocolVersion server_version;
-   //  opaque cookie<0..2^8-1>; } HelloVerifyRequest;
-	internal class HelloVerifyRequest : IHandshakeMessage
+
+    //struct {
+    //  ProtocolVersion server_version;
+    //  opaque cookie<0..2^8-1>; } HelloVerifyRequest;
+    internal class HelloVerifyRequest : IHandshakeMessage
 	{
-		Version _ServerVersion;
-		byte[] _Cookie;
+        public THandshakeType MessageType => THandshakeType.HelloVerifyRequest;
 
-		public THandshakeType MessageType { get { return THandshakeType.HelloVerifyRequest;} }
+        public Version ServerVersion { get; set; }
 
+        public byte[] Cookie { get; set; }
 
-		public Version ServerVersion
+        public HelloVerifyRequest() => this.ServerVersion = ServerHello.DefaultVersion;
+
+        public int CalculateSize(Version version)
 		{
-			get { return _ServerVersion; }
-			set { _ServerVersion = value; }
-		}
+            var  result = 3; //Version + Length of cookie
+			if (this.Cookie != null)
+            {
+                result += this.Cookie.Length;
+            }
 
-		public byte[] Cookie
-		{
-			get { return _Cookie; }
-			set { _Cookie = value; }
-		}
-
-		public HelloVerifyRequest()
-		{
-			_ServerVersion = ServerHello.DefaultVersion;
-		}
-
-		public int CalculateSize(Version version)
-		{
-			int  result = 3; //Version + Length of cookie
-			if (_Cookie != null)
-				result += _Cookie.Length;
-			return result;
+            return result;
 		}
 
 		public static HelloVerifyRequest Deserialise(Stream stream)
 		{
-			HelloVerifyRequest result = new HelloVerifyRequest();
-			result._ServerVersion = new Version(255 - stream.ReadByte(), 255 - stream.ReadByte());
-			int length = stream.ReadByte();
+            if (stream == null)
+            {
+                throw new ArgumentNullException(nameof(stream));
+            }
+
+            var result = new HelloVerifyRequest
+            {
+                ServerVersion = new Version(255 - stream.ReadByte(), 255 - stream.ReadByte())
+            };
+
+            var length = stream.ReadByte();
 			if (length > 0)
 			{
-				result._Cookie = new byte[length];
-				stream.Read(result._Cookie, 0, length);
+				result.Cookie = new byte[length];
+				stream.Read(result.Cookie, 0, length);
 			}
 			return result;
 		}
 
-		public void Serialise(System.IO.Stream stream, Version version)
+		public void Serialise(Stream stream, Version version)
 		{
-			stream.WriteByte((byte)(255 - _ServerVersion.Major));
-			stream.WriteByte((byte)(255 - _ServerVersion.Minor));
-			stream.WriteByte((byte)_Cookie.Length);
-			stream.Write(_Cookie, 0, _Cookie.Length);
+            if (stream == null)
+            {
+                throw new ArgumentNullException(nameof(stream));
+            }
+            
+            stream.WriteByte((byte)(255 - this.ServerVersion.Major));
+			stream.WriteByte((byte)(255 - this.ServerVersion.Minor));
+			stream.WriteByte((byte)this.Cookie.Length);
+			stream.Write(this.Cookie, 0, this.Cookie.Length);
 		}
 	}
 }

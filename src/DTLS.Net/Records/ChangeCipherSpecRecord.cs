@@ -20,18 +20,10 @@
  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ***********************************************************************************************************************/
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-
 namespace DTLS.Records
 {
-	  //    struct {
-	  //    enum { change_cipher_spec(1), (255) } type;
-	  //} ChangeCipherSpec;
-	internal class ChangeCipherSpecRecord
-	{
-
-	}
+    //    struct {
+    //    enum { change_cipher_spec(1), (255) } type;
+    //} ChangeCipherSpec;
+    internal class ChangeCipherSpecRecord { }
 }

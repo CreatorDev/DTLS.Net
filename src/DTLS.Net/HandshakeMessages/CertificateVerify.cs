@@ -21,10 +21,7 @@
 ***********************************************************************************************************************/
 
 using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Text;
 
 namespace DTLS
 {
@@ -53,52 +50,89 @@ namespace DTLS
     //  } CertificateVerify;
     internal class CertificateVerify : IHandshakeMessage
     {
-        public THandshakeType MessageType
-        {
-            get { return THandshakeType.CertificateVerify; }
-        }
+        public THandshakeType MessageType => THandshakeType.CertificateVerify;
 
         public SignatureHashAlgorithm SignatureHashAlgorithm { get; set; }
-        public byte[] Signature { get; set; }
 
+        public byte[] Signature { get; set; }
 
         public int CalculateSize(Version version)
         {
-            int result = 4;
-            if (Signature != null)
+            if (version == null)
             {
-                result += Signature.Length;
+                throw new ArgumentNullException(nameof(version));
+            }
+
+            var result = 2;
+            if(version > DTLSRecord.Version1_0)
+            {
+                result += 2;
+            }
+
+            if (this.Signature != null)
+            {
+                result += this.Signature.Length;
             }
             return result;
         }
 
         public static CertificateVerify Deserialise(Stream stream, Version version)
         {
-            CertificateVerify result = new CertificateVerify();
-            THashAlgorithm hash = (THashAlgorithm)stream.ReadByte();
-            TSignatureAlgorithm signature = (TSignatureAlgorithm)stream.ReadByte();
-            result.SignatureHashAlgorithm = new SignatureHashAlgorithm() { Hash = hash, Signature = signature };
-            ushort length = NetworkByteOrderConverter.ToUInt16(stream);
+            if (stream == null)
+            {
+                throw new ArgumentNullException(nameof(stream));
+            }
+
+            if (version == null)
+            {
+                throw new ArgumentNullException(nameof(version));
+            }
+
+            var result = new CertificateVerify();
+
+            if (version > DTLSRecord.Version1_0)
+            {
+                var hash = (THashAlgorithm)stream.ReadByte();
+                var signature = (TSignatureAlgorithm)stream.ReadByte();
+                result.SignatureHashAlgorithm = new SignatureHashAlgorithm() { Hash = hash, Signature = signature };
+            }
+
+            var length = NetworkByteOrderConverter.ToUInt16(stream);
             if (length > 0)
             {
                 result.Signature = new byte[length];
                 stream.Read(result.Signature, 0, length);
             }
+
             return result;
         }
 
         public void Serialise(Stream stream, Version version)
         {
-            stream.WriteByte((byte)SignatureHashAlgorithm.Hash);
-            stream.WriteByte((byte)SignatureHashAlgorithm.Signature);
-            if (Signature == null)
+            if (stream == null)
             {
-                NetworkByteOrderConverter.WriteUInt16(stream, (ushort)0);
+                throw new ArgumentNullException(nameof(stream));
+            }
+
+            if (version == null)
+            {
+                throw new ArgumentNullException(nameof(version));
+            }
+
+            if (version > DTLSRecord.Version1_0)
+            {
+                stream.WriteByte((byte)this.SignatureHashAlgorithm.Hash);
+                stream.WriteByte((byte)this.SignatureHashAlgorithm.Signature);
+            }
+
+            if (this.Signature == null)
+            {
+                NetworkByteOrderConverter.WriteUInt16(stream, 0);
             }
             else
             {
-                NetworkByteOrderConverter.WriteUInt16(stream, (ushort)Signature.Length);
-                stream.Write(Signature, 0, Signature.Length);
+                NetworkByteOrderConverter.WriteUInt16(stream, (ushort)this.Signature.Length);
+                stream.Write(this.Signature, 0, this.Signature.Length);
             }
         }
     }

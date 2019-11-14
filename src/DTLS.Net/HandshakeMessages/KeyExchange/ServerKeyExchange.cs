@@ -21,104 +21,91 @@
 ***********************************************************************************************************************/
 
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+using System.IO;
 
 namespace DTLS
 {
 
-	  //    enum { rsa, diffie_hellman } KeyExchangeAlgorithm;
+    //    enum { rsa, diffie_hellman } KeyExchangeAlgorithm;
 
-	  //struct {
-	  //    opaque rsa_modulus<1..2^16-1>;
-	  //    opaque rsa_exponent<1..2^16-1>;
-	  //} ServerRSAParams;
+    //struct {
+    //    opaque rsa_modulus<1..2^16-1>;
+    //    opaque rsa_exponent<1..2^16-1>;
+    //} ServerRSAParams;
 
-	  //rsa_modulus
-	  //    The modulus of the server's temporary RSA key.
+    //rsa_modulus
+    //    The modulus of the server's temporary RSA key.
 
-	  //rsa_exponent
-	  //    The public exponent of the server's temporary RSA key.
+    //rsa_exponent
+    //    The public exponent of the server's temporary RSA key.
 
-	  //    struct {
-	  //    opaque dh_p<1..2^16-1>;
-	  //    opaque dh_g<1..2^16-1>;
-	  //    opaque dh_Ys<1..2^16-1>;
-	  //} ServerDHParams;     /* Ephemeral DH parameters */
+    //    struct {
+    //    opaque dh_p<1..2^16-1>;
+    //    opaque dh_g<1..2^16-1>;
+    //    opaque dh_Ys<1..2^16-1>;
+    //} ServerDHParams;     /* Ephemeral DH parameters */
 
-	  //dh_p
-	  //    The prime modulus used for the Diffie-Hellman operation.
+    //dh_p
+    //    The prime modulus used for the Diffie-Hellman operation.
 
-	  //dh_g
-	  //    The generator used for the Diffie-Hellman operation.
+    //dh_g
+    //    The generator used for the Diffie-Hellman operation.
 
-	  //dh_Ys
-	  //  The server's Diffie-Hellman public value (g^X mod p).
-
-
-	  //    struct {
-	  //    select (KeyExchangeAlgorithm) {
-	  //        case diffie_hellman:
-	  //            ServerDHParams params;
-	  //            Signature signed_params;
-	  //        case rsa:
-	  //            ServerRSAParams params;
-	  //            Signature signed_params;
-	  //    };
-	  //} ServerKeyExchange;
+    //dh_Ys
+    //  The server's Diffie-Hellman public value (g^X mod p).
 
 
-
-	  //    struct {
-	  //    select (SignatureAlgorithm) {
-	  //        case anonymous: struct { };
-	  //        case rsa:
-	  //            digitally-signed struct {
-	  //                opaque md5_hash[16];
-	  //                opaque sha_hash[20];
-	  //            };
-	  //        case dsa:
-	  //            digitally-signed struct {
-	  //                opaque sha_hash[20];
-	  //            };
-	  //        };
-	  //    };
-	  //} Signature;
+    //    struct {
+    //    select (KeyExchangeAlgorithm) {
+    //        case diffie_hellman:
+    //            ServerDHParams params;
+    //            Signature signed_params;
+    //        case rsa:
+    //            ServerRSAParams params;
+    //            Signature signed_params;
+    //    };
+    //} ServerKeyExchange;
 
 
 
-		//  enum { ecdsa } SignatureAlgorithm;
+    //    struct {
+    //    select (SignatureAlgorithm) {
+    //        case anonymous: struct { };
+    //        case rsa:
+    //            digitally-signed struct {
+    //                opaque md5_hash[16];
+    //                opaque sha_hash[20];
+    //            };
+    //        case dsa:
+    //            digitally-signed struct {
+    //                opaque sha_hash[20];
+    //            };
+    //        };
+    //    };
+    //} Signature;
 
-		//  select (SignatureAlgorithm) {
-		//      case ecdsa:
-		//          digitally-signed struct {
-		//              opaque sha_hash[sha_size];
-		//          };
-		//  } Signature;
 
 
-		//ServerKeyExchange.signed_params.sha_hash
-		//    SHA(ClientHello.random + ServerHello.random +
-		//                                      ServerKeyExchange.params);
+    //  enum { ecdsa } SignatureAlgorithm;
 
-	internal class ServerKeyExchange : IHandshakeMessage
+    //  select (SignatureAlgorithm) {
+    //      case ecdsa:
+    //          digitally-signed struct {
+    //              opaque sha_hash[sha_size];
+    //          };
+    //  } Signature;
+
+
+    //ServerKeyExchange.signed_params.sha_hash
+    //    SHA(ClientHello.random + ServerHello.random +
+    //                                      ServerKeyExchange.params);
+
+    internal class ServerKeyExchange : IHandshakeMessage
 	{
+        public THandshakeType MessageType => THandshakeType.ServerKeyExchange;
 
+        public virtual int CalculateSize(Version version) => 0;
 
-		public THandshakeType MessageType
-		{
-			get { return THandshakeType.ServerKeyExchange; }
-		}
-
-		public virtual int CalculateSize(Version version)
-		{
-			return 0;
-		}
-
-		public virtual void Serialise(System.IO.Stream stream, Version version)
-		{
-			
-		}
-	}
+        public virtual void Serialise(Stream stream, Version version) => throw new NotImplementedException();
+    }
 }

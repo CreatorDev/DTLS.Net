@@ -21,218 +21,225 @@
 ***********************************************************************************************************************/
 
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.IO;
 using System.Net;
+using System.Security.Cryptography;
 
 namespace DTLS
 {
 
-	  //opaque SessionID<0..32>;
+    //opaque SessionID<0..32>;
 
-	//      uint8 CipherSuite[2];    /* Cryptographic suite selector */
+    //      uint8 CipherSuite[2];    /* Cryptographic suite selector */
 
-	//      enum { null(0), (255) } CompressionMethod;
+    //      enum { null(0), (255) } CompressionMethod;
 
 
-	  //    struct {
-	  //    ExtensionType extension_type;
-	  //    opaque extension_data<0..2^16-1>;
-	  //} Extension;
+    //    struct {
+    //    ExtensionType extension_type;
+    //    opaque extension_data<0..2^16-1>;
+    //} Extension;
 
-	  //enum {
-	  //    signature_algorithms(13), (65535)
-	  //} ExtensionType;
+    //enum {
+    //    signature_algorithms(13), (65535)
+    //} ExtensionType;
 
-	//  struct {
-	//ProtocolVersion client_version;
-	//Random random;
-	//SessionID session_id;
-	//opaque cookie<0..2^8-1>;                             // New field
-	//CipherSuite cipher_suites<2..2^16-1>;
-	//CompressionMethod compression_methods<1..2^8-1>; 
-	//      select (extensions_present) {
-	//          case false:
-	//              struct {};
-	//          case true:
-	//              Extension extensions<0..2^16-1>;
-	//      };
-	//} ClientHello;
-	internal class ClientHello: IHandshakeMessage
+    //  struct {
+    //ProtocolVersion client_version;
+    //Random random;
+    //SessionID session_id;
+    //opaque cookie<0..2^8-1>;                             // New field
+    //CipherSuite cipher_suites<2..2^16-1>;
+    //CompressionMethod compression_methods<1..2^8-1>; 
+    //      select (extensions_present) {
+    //          case false:
+    //              struct {};
+    //          case true:
+    //              Extension extensions<0..2^16-1>;
+    //      };
+    //} ClientHello;
+    internal class ClientHello: IHandshakeMessage
 	{
-		private Version _ClientVersion;
-		private RandomData _Random;
-		private byte[] _SessionID;
-		private byte[] _Cookie;
-		private ushort[] _CipherSuites;
-		private byte[] _CompressionMethods;
-		private Extensions _Extensions;
+        public THandshakeType MessageType => THandshakeType.ClientHello;
 
-        public THandshakeType MessageType { get { return THandshakeType.ClientHello; } }
+        public Version ClientVersion { get; set; }
+
+        public RandomData Random { get; set; }
         
-		public Version ClientVersion
-		{
-			get { return _ClientVersion; }
-			set { _ClientVersion = value; }
-		}
+        public byte[] SessionID { get; set; }
+        
+        public byte[] Cookie { get; set; }
 
-		public RandomData Random
-		{
-			get { return _Random; }
-			set { _Random = value; }
-		}
+        public ushort[] CipherSuites { get; set; }
 
+        public byte[] CompressionMethods { get; set; }
 
-		public byte[] SessionID
-		{
-			get { return _SessionID; }
-			set { _SessionID = value; }
-		}
-
-
-		public byte[] Cookie
-		{
-			get { return _Cookie; }
-			set { _Cookie = value; }
-		}
-
-		public ushort[] CipherSuites
-		{
-			get { return _CipherSuites; }
-			set { _CipherSuites = value; }
-		}
-
-		public byte[] CompressionMethods
-		{
-			get { return _CompressionMethods; }
-			set { _CompressionMethods = value; }
-		}
-
-		public Extensions Extensions
-		{
-			get { return _Extensions; }
-			set { _Extensions = value; }
-		}
-
-
+        public Extensions Extensions { get; set; }
+        
         public int CalculateSize(Version version)
         {
-            int result = 39;  // Version (2 bytes) + Random (32 bytes) + SessionIDLength (1 byte) + _CompressionMethodsLength (1 byte) 
+            var result = 39;  // Version (2 bytes) + Random (32 bytes) + SessionIDLength (1 byte) + _CompressionMethodsLength (1 byte) 
                               // + CookieLength (1 byte) + CipherSuitesLength (2 bytes) 
-            if (_SessionID != null)
-                result += _SessionID.Length;
-            if (_Cookie != null)
-                result += Cookie.Length;
-            if (_CipherSuites != null)
-                result += (_CipherSuites.Length * 2);
-            if (_CompressionMethods != null)
-                result += _CompressionMethods.Length;
-            if (_Extensions == null)
+            if (this.SessionID != null)
+            {
+                result += this.SessionID.Length;
+            }
+
+            if (this.Cookie != null)
+            {
+                result += this.Cookie.Length;
+            }
+
+            if (this.CipherSuites != null)
+            {
+                result += (this.CipherSuites.Length * 2);
+            }
+
+            if (this.CompressionMethods != null)
+            {
+                result += this.CompressionMethods.Length;
+            }
+
+            if (this.Extensions == null)
+            {
                 result += 2;
+            }
             else
-                result += _Extensions.CalculateSize();
+            {
+                result += this.Extensions.CalculateSize();
+            }
+
             return result;
         }
 
 		public byte[] CalculateCookie(EndPoint remoteEndPoint, byte[] secret)
 		{
-			//Cookie = HMAC(Secret, Client-IP, Client-Parameters)
-			//(version, random, session_id, cipher_suites,  compression_method) 
-			byte[] result = new byte[32];
-			SocketAddress socketAddress = remoteEndPoint.Serialize();
-			int socketAddressSize = socketAddress.Size;
-			byte[] message = new byte[socketAddressSize + 34];
-			for (int index = 0; index < socketAddressSize; index++)
+            if (remoteEndPoint == null)
+            {
+                throw new ArgumentNullException(nameof(remoteEndPoint));
+            }
+
+            if (secret == null)
+            {
+                throw new ArgumentNullException(nameof(secret));
+            }
+
+            //Cookie = HMAC(Secret, Client-IP, Client-Parameters)
+            //(version, random, session_id, cipher_suites,  compression_method) 
+            var result = new byte[32];
+			var socketAddress = remoteEndPoint.Serialize();
+			var socketAddressSize = socketAddress.Size;
+			var message = new byte[socketAddressSize + 34];
+			for (var index = 0; index < socketAddressSize; index++)
 			{
 				message[0] = socketAddress[index];
 			}
-			NetworkByteOrderConverter.WriteUInt32(message, socketAddressSize, _Random.UnixTime);
-			Buffer.BlockCopy(_Random.RandomBytes, 0, message, socketAddressSize + 4, 28);
-			System.Security.Cryptography.HMACSHA256 hmac = new System.Security.Cryptography.HMACSHA256(secret);
-			byte[] hash = hmac.ComputeHash(message);
+			NetworkByteOrderConverter.WriteUInt32(message, socketAddressSize, this.Random.UnixTime);
+			Buffer.BlockCopy(this.Random.RandomBytes, 0, message, socketAddressSize + 4, 28);
+			var hmac = new HMACSHA256(secret);
+			var hash = hmac.ComputeHash(message);
 			Buffer.BlockCopy(hash, 0, result, 0, 32);
 			return result;
 		}
 
 		public static ClientHello Deserialise(Stream stream)
 		{
-			ClientHello result = new ClientHello();
-			result._ClientVersion = new Version(255 - stream.ReadByte(), 255 - stream.ReadByte());
-			result._Random = RandomData.Deserialise(stream);
-			int length = stream.ReadByte();
+            if (stream == null)
+            {
+                throw new ArgumentNullException(nameof(stream));
+            }
+
+            var result = new ClientHello
+            {
+                ClientVersion = new Version(255 - stream.ReadByte(), 255 - stream.ReadByte()),
+                Random = RandomData.Deserialise(stream)
+            };
+
+            var length = stream.ReadByte();
 			if (length > 0)
 			{
-				result._SessionID = new byte[length];
-				stream.Read(result._SessionID, 0, length);
+				result.SessionID = new byte[length];
+				stream.Read(result.SessionID, 0, length);
 			}
+
 			length = stream.ReadByte();
 			if (length > 0)
 			{
-				result._Cookie = new byte[length];
-				stream.Read(result._Cookie, 0, length);
+				result.Cookie = new byte[length];
+				stream.Read(result.Cookie, 0, length);
 			}
-			ushort cipherSuitesLength = (ushort)(NetworkByteOrderConverter.ToUInt16(stream) / 2);
+
+			var cipherSuitesLength = (ushort)(NetworkByteOrderConverter.ToUInt16(stream) / 2);
 			if (cipherSuitesLength > 0)
 			{
-				result._CipherSuites = new ushort[cipherSuitesLength];
+				result.CipherSuites = new ushort[cipherSuitesLength];
 				for (uint index = 0; index < cipherSuitesLength; index++)
 				{
-					result._CipherSuites[index] = NetworkByteOrderConverter.ToUInt16(stream);
+					result.CipherSuites[index] = NetworkByteOrderConverter.ToUInt16(stream);
 				}
 			}
+
 			length = stream.ReadByte();
 			if (length > 0)
 			{
-				result._CompressionMethods = new byte[length];
-				stream.Read(result._CompressionMethods, 0, length);
+				result.CompressionMethods = new byte[length];
+				stream.Read(result.CompressionMethods, 0, length);
 			}
-			result._Extensions = Extensions.Deserialise(stream, true);
+
+			result.Extensions = Extensions.Deserialise(stream, true);
 			return result;
 		}
 
-		public void Serialise(System.IO.Stream stream, Version version)
+		public void Serialise(Stream stream, Version version)
 		{
-			stream.WriteByte((byte)(255 - _ClientVersion.Major));
-			stream.WriteByte((byte)(255 - _ClientVersion.Minor));
-			_Random.Serialise(stream);
-			if (_SessionID == null)
-			{
-				stream.WriteByte(0);	
-			}
-			else
-			{
-				stream.WriteByte((byte)_SessionID.Length);
-				stream.Write(_SessionID, 0, _SessionID.Length);	
-			}
-			if (_Cookie == null)
+            if (stream == null)
+            {
+                throw new ArgumentNullException(nameof(stream));
+            }
+
+            stream.WriteByte((byte)(255 - this.ClientVersion.Major));
+			stream.WriteByte((byte)(255 - this.ClientVersion.Minor));
+            this.Random.Serialise(stream);
+			if (this.SessionID == null)
 			{
 				stream.WriteByte(0);
 			}
 			else
 			{
-				stream.WriteByte((byte)_Cookie.Length);
-                stream.Write(_Cookie, 0, _Cookie.Length);
+				stream.WriteByte((byte)this.SessionID.Length);
+				stream.Write(this.SessionID, 0, this.SessionID.Length);	
 			}
-			if (_CipherSuites.Length > 0)
+
+			if (this.Cookie == null)
 			{
-				NetworkByteOrderConverter.WriteUInt16(stream,(ushort)(_CipherSuites.Length * 2));
-				for (uint index = 0; index < _CipherSuites.Length; index++)
+				stream.WriteByte(0);
+			}
+			else
+			{
+				stream.WriteByte((byte)this.Cookie.Length);
+                stream.Write(this.Cookie, 0, this.Cookie.Length);
+			}
+
+			if (this.CipherSuites.Length > 0)
+			{
+				NetworkByteOrderConverter.WriteUInt16(stream,(ushort)(this.CipherSuites.Length * 2));
+				for (var index = 0; index < this.CipherSuites.Length; index++)
 				{
-					NetworkByteOrderConverter.WriteUInt16(stream,_CipherSuites[index]);
+					NetworkByteOrderConverter.WriteUInt16(stream, this.CipherSuites[index]);
 				}
 			}
-			stream.WriteByte((byte)_CompressionMethods.Length);
-			stream.Write(_CompressionMethods, 0, _CompressionMethods.Length);
-			if (_Extensions == null)
+
+			stream.WriteByte((byte)this.CompressionMethods.Length);
+			stream.Write(this.CompressionMethods, 0, this.CompressionMethods.Length);
+
+			if (this.Extensions == null)
+            {
                 NetworkByteOrderConverter.WriteUInt16(stream, 0);
+            }
             else
             {
-				_Extensions.Serialise(stream);
+                this.Extensions.Serialise(stream);
 			}
-
 		}
-
 	}
 }

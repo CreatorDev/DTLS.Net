@@ -22,31 +22,29 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.IO;
 
 namespace DTLS
 {
-	// Extension extensions<0..2^16-1>;
+    // Extension extensions<0..2^16-1>;
 
 
-	//    struct {
-	//    ExtensionType extension_type;
-	//    opaque extension_data<0..2^16-1>;
-	//} Extension;
+    //    struct {
+    //    ExtensionType extension_type;
+    //    opaque extension_data<0..2^16-1>;
+    //} Extension;
 
-	//enum {
-	//    signature_algorithms(13), (65535)
-	//} ExtensionType;
+    //enum {
+    //    signature_algorithms(13), (65535)
+    //} ExtensionType;
 
 
-	internal class Extensions : List<Extension>
+    internal class Extensions : List<Extension>
 	{
 		public int CalculateSize()
 		{
-			int result = 2;
-			foreach (Extension item in this)
+			var result = 2;
+			foreach (var item in this)
 			{
 				result += item.CalculateSize();
 			}
@@ -55,14 +53,19 @@ namespace DTLS
 
 		public static Extensions Deserialise(Stream stream, bool client)
 		{
+            if(stream == null)
+            {
+                throw new ArgumentNullException(nameof(stream));
+            }
+
 			Extensions result = null;
 			if (stream.Position < stream.Length)
 			{
 				result = new Extensions();
-				ushort length = NetworkByteOrderConverter.ToUInt16(stream);
+				var length = NetworkByteOrderConverter.ToUInt16(stream);
 				if (length > 0)
 				{
-					Extension extension = Extension.Deserialise(stream, client);
+					var extension = Extension.Deserialise(stream, client);
 					while (extension != null)
 					{
 						result.Add(extension);
@@ -73,19 +76,23 @@ namespace DTLS
 			return result;
 		}
 
-		public void Serialise(System.IO.Stream stream)
+		public void Serialise(Stream stream)
 		{
+            if(stream == null)
+            {
+                throw new ArgumentNullException(nameof(stream));
+            }
+
             uint length = 0;
-            foreach (Extension item in this)
+            foreach (var item in this)
             {
                 length += (uint)item.CalculateSize();
             }
             NetworkByteOrderConverter.WriteUInt16(stream, (ushort)length);
-            foreach (Extension item in this)
+            foreach (var item in this)
             {
                 item.Serialise(stream);
             }
 		}
-
 	}
 }

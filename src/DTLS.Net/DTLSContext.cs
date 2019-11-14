@@ -20,13 +20,13 @@
  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ***********************************************************************************************************************/
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using Org.BouncyCastle.Crypto.Tls;
 using Org.BouncyCastle.Crypto.Prng;
+using Org.BouncyCastle.Crypto.Tls;
+using Org.BouncyCastle.Security;
 using Org.BouncyCastle.Utilities;
+using System;
+
+using BcTls = Org.BouncyCastle.Crypto.Tls;
 
 namespace DTLS
 {
@@ -34,105 +34,95 @@ namespace DTLS
 	{
 		private class DTLSSecurityParameters : SecurityParameters
 		{
-            private HandshakeInfo _HandshakeInfo;
-			private byte[] _ClientRandom;
-			private byte[] _ServerRandom;
-            private int _PrfAlgorithm;
+            private readonly HandshakeInfo _HandshakeInfo;
+			private readonly byte[] _ClientRandom;
+			private readonly byte[] _ServerRandom;
+            private readonly int _PrfAlgorithm;
 
-            public override int CipherSuite { get { return (int)_HandshakeInfo.CipherSuite; } }
-			public override byte[] ClientRandom { get { return _ClientRandom; } }
-            public override byte[] MasterSecret { get { return _HandshakeInfo.MasterSecret; } }
-            public override int PrfAlgorithm { get { return _PrfAlgorithm; } } 
-			public override byte[] ServerRandom { get { return _ServerRandom; } }
+            public override int CipherSuite => (int)this._HandshakeInfo.CipherSuite;
+            public override byte[] ClientRandom => this._ClientRandom;
+            public override byte[] MasterSecret => this._HandshakeInfo.MasterSecret;
+            public override int PrfAlgorithm => this._PrfAlgorithm;
+            public override byte[] ServerRandom => this._ServerRandom;
 
             public DTLSSecurityParameters(Version version, HandshakeInfo handshakeInfo)
 			{
-                _HandshakeInfo = handshakeInfo;
+                if (version == null)
+                {
+                    throw new ArgumentNullException(nameof(version));
+                }
+                
+                this._HandshakeInfo = handshakeInfo;
                 if (handshakeInfo != null)
                 {
-                    _ClientRandom = handshakeInfo.ClientRandom.Serialise();
-                    _ServerRandom = handshakeInfo.ServerRandom.Serialise();
+                    this._ClientRandom = handshakeInfo.ClientRandom.Serialise();
+                    this._ServerRandom = handshakeInfo.ServerRandom.Serialise();
                 }
-                TPseudorandomFunction prf = CipherSuites.GetPseudorandomFunction(version, handshakeInfo.CipherSuite);
-                switch (prf)
+
+                switch (CipherSuites.GetPseudorandomFunction(version, handshakeInfo.CipherSuite))
                 {
                     case TPseudorandomFunction.NotSet:
-                        break;
+                        {
+                            break;
+                        }
                     case TPseudorandomFunction.Legacy:
-                        _PrfAlgorithm = Org.BouncyCastle.Crypto.Tls.PrfAlgorithm.tls_prf_legacy;
-                        break;
+                        {
+                            this._PrfAlgorithm = BcTls.PrfAlgorithm.tls_prf_legacy;
+                            break;
+                        }
                     case TPseudorandomFunction.SHA256:
-                        _PrfAlgorithm = Org.BouncyCastle.Crypto.Tls.PrfAlgorithm.tls_prf_sha256;
-                        break;
+                        {
+                            this._PrfAlgorithm = BcTls.PrfAlgorithm.tls_prf_sha256;
+                            break;
+                        }
                     case TPseudorandomFunction.SHA384:
-                        _PrfAlgorithm = Org.BouncyCastle.Crypto.Tls.PrfAlgorithm.tls_prf_sha384;
-                        break;
+                        {
+                            this._PrfAlgorithm = BcTls.PrfAlgorithm.tls_prf_sha384;
+                            break;
+                        }
                     default:
-                        break;
+                        {
+                            break;
+                        }
                 }
 			}
     	}
-
-		public ProtocolVersion ClientVersion { get; private set; }
-
-		public byte[] ExportKeyingMaterial(string asciiLabel, byte[] context_value, int length)
-		{
-			throw new NotImplementedException();
-		}
-
-		public bool IsServer		{            get; private set;		}
-
-		public Org.BouncyCastle.Crypto.Prng.IRandomGenerator NonceRandomGenerator { get; private set; }
-
-		public TlsSession ResumableSession
-		{
-			get { throw new NotImplementedException(); }
-		}
-
-		public Org.BouncyCastle.Security.SecureRandom SecureRandom
+        
+        public ProtocolVersion ClientVersion { get; private set; }
+        public bool IsServer { get; private set; }
+		public IRandomGenerator NonceRandomGenerator { get; private set; }
+        public SecureRandom SecureRandom { get;  set; }
+        public SecurityParameters SecurityParameters { get; private set; }
+		public ProtocolVersion ServerVersion { get; private set; }
+		public object UserObject
         {
-            get;
-            set;
+            get => throw new NotImplementedException();
+            set => throw new NotImplementedException();
         }
 
-        public SecurityParameters SecurityParameters { get; private set; }
-
-		public ProtocolVersion ServerVersion { get; private set; }
-
-		public object UserObject
-		{
-			get
-			{
-				throw new NotImplementedException();
-			}
-			set
-			{
-				throw new NotImplementedException();
-			}
-		}
-
-		public DTLSContext()
-		{
-
-		}
+        public DTLSContext() { }
 
         public DTLSContext(bool client, Version version, HandshakeInfo handshakeInfo)
-		{
-            IsServer = !client;
+        {
+            this.IsServer = !client;
             if (version == DTLSRecord.Version1_2)
             {
-                ClientVersion = ProtocolVersion.DTLSv12;
-                ServerVersion = ProtocolVersion.DTLSv12;
+                this.ClientVersion = ProtocolVersion.DTLSv12;
+                this.ServerVersion = ProtocolVersion.DTLSv12;
             }
             else
             {
-                ClientVersion = ProtocolVersion.DTLSv10;
-                ServerVersion = ProtocolVersion.DTLSv10;
+                this.ClientVersion = ProtocolVersion.DTLSv10;
+                this.ServerVersion = ProtocolVersion.DTLSv10;
             }
-            SecurityParameters = new DTLSSecurityParameters(version, handshakeInfo);
-			NonceRandomGenerator = new DigestRandomGenerator(TlsUtilities.CreateHash(HashAlgorithm.sha256));
-			NonceRandomGenerator.AddSeedMaterial(Times.NanoTime());
+            this.SecurityParameters = new DTLSSecurityParameters(version, handshakeInfo);
+            this.NonceRandomGenerator = new DigestRandomGenerator(TlsUtilities.CreateHash(HashAlgorithm.sha256));
+            this.NonceRandomGenerator.AddSeedMaterial(Times.NanoTime());
 
-		}
+        }
+
+        public byte[] ExportKeyingMaterial(string asciiLabel, byte[] context_value, int length) => throw new NotImplementedException();
+
+        public TlsSession ResumableSession => throw new NotImplementedException();
 	}
 }

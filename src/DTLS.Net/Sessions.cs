@@ -21,56 +21,44 @@
 ***********************************************************************************************************************/
 
 using System;
-using System.Net;
-using System.Collections.Generic;
 using System.Collections.Concurrent;
-using System.Linq;
-using System.Text;
+using System.Collections.Generic;
+using System.Net;
 
 namespace DTLS
 {
-	internal class Sessions
+    internal class Sessions
 	{
-		private ConcurrentDictionary<SocketAddress, Session> _Sessions;
-		private ConcurrentDictionary<Guid, Session> _SessionsByID;
-		private List<Session> _SessionList;
-
-		public Sessions()
-		{
-			_Sessions = new ConcurrentDictionary<SocketAddress, Session>();
-			_SessionsByID = new ConcurrentDictionary<Guid, Session>();
-			_SessionList = new List<Session>();
-		}
+		private readonly ConcurrentDictionary<SocketAddress, Session> _Sessions = new ConcurrentDictionary<SocketAddress, Session>();
+        private readonly ConcurrentDictionary<Guid, Session> _SessionsByID = new ConcurrentDictionary<Guid, Session>();
+        private readonly List<Session> _SessionList = new List<Session>();
 
 		public void AddSession(SocketAddress address, Session session)
 		{
-			if (_Sessions.TryAdd(address, session))
+			if (this._Sessions.TryAdd(address, session))
 			{
-				_SessionsByID.TryAdd(session.SessionID, session);
-				_SessionList.Add(session);
+                this._SessionsByID.TryAdd(session.SessionID, session);
+                this._SessionList.Add(session);
 			}
 		}
 
 		public Session GetSession(SocketAddress address)
 		{
-			Session result;
-			_Sessions.TryGetValue(address, out result);
-			return result;
+            this._Sessions.TryGetValue(address, out var result);
+            return result;
 		}
 
 		public Session GetSession(Guid sessionID)
 		{
-			Session result;
-			_SessionsByID.TryGetValue(sessionID, out result);
-			return result;
+            this._SessionsByID.TryGetValue(sessionID, out var result);
+            return result;
 		}
 
         public void Remove(Session session, SocketAddress address)
         {
-            Session existing;
-            _Sessions.TryRemove(address, out session);
-            _SessionsByID.TryRemove(session.SessionID, out existing);
-            _SessionList.Remove(session);
+            this._Sessions.TryRemove(address, out session);
+            this._SessionsByID.TryRemove(session.SessionID, out var existing);
+            this._SessionList.Remove(session);
         }
     }
 }

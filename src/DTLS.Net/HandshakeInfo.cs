@@ -20,19 +20,17 @@
  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ***********************************************************************************************************************/
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using Org.BouncyCastle.Crypto;
+using Org.BouncyCastle.Crypto.Digests;
+using System;
 
 namespace DTLS
 {
     internal class HandshakeInfo
     {
-        private Org.BouncyCastle.Crypto.Digests.Sha1Digest _VerifyHandshakeSHA1;
-        private Org.BouncyCastle.Crypto.Digests.MD5Digest _VerifyHandshakeMD5;
-        private IDigest _VerifyHandshake;
+        private readonly Sha1Digest _VerifyHandshakeSHA1 = new Sha1Digest();
+        private readonly MD5Digest _VerifyHandshakeMD5 = new MD5Digest();
+        private readonly IDigest _VerifyHandshake = new Sha256Digest();
 
         public TCipherSuite CipherSuite { get; set; }
 
@@ -46,52 +44,41 @@ namespace DTLS
 
         public ushort MessageSequence { get; set; }
 
-        public HandshakeInfo()
-        {
-        }
-
-        public void InitaliseHandshakeHash(bool legacy)
-        {
-            if (legacy)
-            {
-                _VerifyHandshakeSHA1 = new Org.BouncyCastle.Crypto.Digests.Sha1Digest();
-                _VerifyHandshakeMD5 = new Org.BouncyCastle.Crypto.Digests.MD5Digest();
-            }
-            else
-                _VerifyHandshake = new Org.BouncyCastle.Crypto.Digests.Sha256Digest();
-        }
-
         public void UpdateHandshakeHash(byte[] data)
         {
-            if (_VerifyHandshake == null)
+            if(data == null)
             {
-                if (_VerifyHandshakeSHA1 != null)
-                { 
-                    _VerifyHandshakeSHA1.BlockUpdate(data, 0, data.Length);
-                    _VerifyHandshakeMD5.BlockUpdate(data, 0, data.Length);
-                }
+                throw new ArgumentNullException(nameof(data));
             }
-            else
-                _VerifyHandshake.BlockUpdate(data, 0, data.Length);
+
+            this._VerifyHandshakeSHA1.BlockUpdate(data, 0, data.Length);
+            this._VerifyHandshakeMD5.BlockUpdate(data, 0, data.Length);
+            this._VerifyHandshake.BlockUpdate(data, 0, data.Length);
         }
 
-        public byte[] GetHash()
+        public byte[] GetHash(Version version)
         {
-            byte[] handshakeHash;
-            if (_VerifyHandshake == null)
+            if(version == null)
             {
-                IDigest sha1 = new Org.BouncyCastle.Crypto.Digests.Sha1Digest(_VerifyHandshakeSHA1);
-                IDigest md5 = new Org.BouncyCastle.Crypto.Digests.MD5Digest(_VerifyHandshakeMD5);
+                throw new ArgumentNullException(nameof(version));
+            }
+
+            byte[] handshakeHash;
+            if (version < DTLSRecord.Version1_2)
+            {
+                IDigest sha1 = new Sha1Digest(this._VerifyHandshakeSHA1);
+                IDigest md5 = new MD5Digest(this._VerifyHandshakeMD5);
                 handshakeHash = new byte[sha1.GetDigestSize() + md5.GetDigestSize()];
                 md5.DoFinal(handshakeHash, 0);
                 sha1.DoFinal(handshakeHash, md5.GetDigestSize());
             }
             else
             {
-                IDigest hash = new Org.BouncyCastle.Crypto.Digests.Sha256Digest((Org.BouncyCastle.Crypto.Digests.Sha256Digest)_VerifyHandshake);
+                IDigest hash = new Sha256Digest((Sha256Digest)this._VerifyHandshake);
                 handshakeHash = new byte[hash.GetDigestSize()];
                 hash.DoFinal(handshakeHash, 0);
             }
+
             return handshakeHash;
         }
     }

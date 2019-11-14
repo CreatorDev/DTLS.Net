@@ -21,56 +21,58 @@
 ***********************************************************************************************************************/
 
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.IO;
 
 namespace DTLS
 {
-	
-	  //struct {
-	  //    opaque verify_data[verify_data_length];
-	  //} Finished;
 
-	  //verify_data
-	  //   PRF(master_secret, finished_label, Hash(handshake_messages))
-	  //      [0..verify_data_length-1];
+    //struct {
+    //    opaque verify_data[verify_data_length];
+    //} Finished;
 
-	  //finished_label
-	  //   For Finished messages sent by the client, the string
-	  //   "client finished".  For Finished messages sent by the server,
-	  //   the string "server finished".
+    //verify_data
+    //   PRF(master_secret, finished_label, Hash(handshake_messages))
+    //      [0..verify_data_length-1];
 
-	 //verify_data_length default = 12
+    //finished_label
+    //   For Finished messages sent by the client, the string
+    //   "client finished".  For Finished messages sent by the server,
+    //   the string "server finished".
 
-	internal class Finished : IHandshakeMessage
+    //verify_data_length default = 12
+
+    internal class Finished : IHandshakeMessage
 	{
-		private byte[] _VerifyData;
+        public THandshakeType MessageType => THandshakeType.Finished;
 
-		public THandshakeType MessageType
-		{
-			get { return THandshakeType.Finished; }
-		}
+        public byte[] VerifyData { get; set; }
 
-        public byte[] VerifyData { get { return _VerifyData; } set { _VerifyData = value;} }
+        public int CalculateSize(Version version) => 12;
 
-		public int CalculateSize(Version version)
+        public static Finished Deserialise(Stream stream)
 		{
-            return 12;
-		}
-        
-		public static Finished Deserialise(Stream stream)
-		{
-			Finished result = new Finished();
-			result._VerifyData = new byte[12];
-			stream.Read(result._VerifyData, 0, 12);
+            if (stream == null)
+            {
+                throw new ArgumentNullException(nameof(stream));
+            }
+
+            var result = new Finished
+            {
+                VerifyData = new byte[12]
+            };
+
+            stream.Read(result.VerifyData, 0, 12);
 			return result;
 		}
 
 		public void Serialise(Stream stream, Version version)
 		{
-            stream.Write(_VerifyData, 0, _VerifyData.Length);
+            if (stream == null)
+            {
+                throw new ArgumentNullException(nameof(stream));
+            }
+            
+            stream.Write(this.VerifyData, 0, this.VerifyData.Length);
 		}
 	}
 }

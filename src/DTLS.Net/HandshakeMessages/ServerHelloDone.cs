@@ -21,27 +21,16 @@
 ***********************************************************************************************************************/
 
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 
 namespace DTLS
 {
-	 // struct { } ServerHelloDone;
-	internal class ServerHelloDone : IHandshakeMessage
+    // struct { } ServerHelloDone;
+    internal class ServerHelloDone : IHandshakeMessage
 	{
-		public THandshakeType MessageType
-		{
-			get { return THandshakeType.ServerHelloDone; }
-		}
+        public THandshakeType MessageType => THandshakeType.ServerHelloDone;
 
-		public int CalculateSize(Version version)
-		{
-			return 0;
-		}
+        public int CalculateSize(Version version) => 0;
 
-		public void Serialise(System.IO.Stream stream, Version version)
-		{
-		}
-	}
+        public void Serialise(System.IO.Stream stream, Version version) { }
+    }
 }

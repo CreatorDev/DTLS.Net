@@ -20,170 +20,146 @@
  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ***********************************************************************************************************************/
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using Org.BouncyCastle.Crypto;
-using Org.BouncyCastle.Security;
 using Org.BouncyCastle.Crypto.Digests;
 using Org.BouncyCastle.Crypto.Signers;
+using System;
+using System.IO;
 
 namespace DTLS
 {
-		//    struct {
-		//    opaque a <1..2^8-1>;
-		//    opaque b <1..2^8-1>;
-		//} ECCurve;
+    //    struct {
+    //    opaque a <1..2^8-1>;
+    //    opaque b <1..2^8-1>;
+    //} ECCurve;
 
-		//enum { explicit_prime (1), explicit_char2 (2),
-		//       named_curve (3), reserved(248..255) } ECCurveType;
-		//    struct {
-		//    opaque point <1..2^8-1>;
-		//} ECPoint;
-	//enum { ec_basis_trinomial, ec_basis_pentanomial } ECBasisType;
-//            struct {
-//            ECCurveType    curve_type;
-//            select (curve_type) {
-//                case explicit_prime:
-//                    opaque      prime_p <1..2^8-1>;
-//                    ECCurve     curve;
-//                    ECPoint     base;
-//                    opaque      order <1..2^8-1>;
-//                    opaque      cofactor <1..2^8-1>;
-//                case explicit_char2:
-//                    uint16      m;
-//                    ECBasisType basis;
-//                    select (basis) {
-//                        case ec_trinomial:
-//                            opaque  k <1..2^8-1>;
-//                        case ec_pentanomial:
-//                            opaque  k1 <1..2^8-1>;
-//                            opaque  k2 <1..2^8-1>;
-//                            opaque  k3 <1..2^8-1>;
-//                    };
-//                    ECCurve     curve;
-//                    ECPoint     base;
-//                    opaque      order <1..2^8-1>;
-//                    opaque      cofactor <1..2^8-1>;
-
-
-
-//Blake-Wilson, et al.         Informational                     [Page 18]
-
-//RFC 4492               ECC Cipher Suites for TLS                May 2006
+    //enum { explicit_prime (1), explicit_char2 (2),
+    //       named_curve (3), reserved(248..255) } ECCurveType;
+    //    struct {
+    //    opaque point <1..2^8-1>;
+    //} ECPoint;
+    //enum { ec_basis_trinomial, ec_basis_pentanomial } ECBasisType;
+    //            struct {
+    //            ECCurveType    curve_type;
+    //            select (curve_type) {
+    //                case explicit_prime:
+    //                    opaque      prime_p <1..2^8-1>;
+    //                    ECCurve     curve;
+    //                    ECPoint     base;
+    //                    opaque      order <1..2^8-1>;
+    //                    opaque      cofactor <1..2^8-1>;
+    //                case explicit_char2:
+    //                    uint16      m;
+    //                    ECBasisType basis;
+    //                    select (basis) {
+    //                        case ec_trinomial:
+    //                            opaque  k <1..2^8-1>;
+    //                        case ec_pentanomial:
+    //                            opaque  k1 <1..2^8-1>;
+    //                            opaque  k2 <1..2^8-1>;
+    //                            opaque  k3 <1..2^8-1>;
+    //                    };
+    //                    ECCurve     curve;
+    //                    ECPoint     base;
+    //                    opaque      order <1..2^8-1>;
+    //                    opaque      cofactor <1..2^8-1>;
 
 
-//                case named_curve:
-//                    NamedCurve namedcurve;
-//            };
-//        } ECParameters;
-	
-		//struct {
-		//    ECParameters    curve_params;
-		//    ECPoint         public;
-		//} ServerECDHParams;
+
+    //Blake-Wilson, et al.         Informational                     [Page 18]
+
+    //RFC 4492               ECC Cipher Suites for TLS                May 2006
 
 
-   //       enum { ec_diffie_hellman } KeyExchangeAlgorithm;
+    //                case named_curve:
+    //                    NamedCurve namedcurve;
+    //            };
+    //        } ECParameters;
 
-   //ec_diffie_hellman:   Indicates the ServerKeyExchange message contains
-   //   an ECDH public key.
-
-   //     select (KeyExchangeAlgorithm) {
-   //         case ec_diffie_hellman:
-   //             ServerECDHParams    params;
-   //             Signature           signed_params;
-   //     } ServerKeyExchange;
-
-
-	
-		//  enum { ecdsa } SignatureAlgorithm;
-
-		//  select (SignatureAlgorithm) {
-		//      case ecdsa:
-		//          digitally-signed struct {
-		//              opaque sha_hash[sha_size];
-		//          };
-		//  } Signature;
+    //struct {
+    //    ECParameters    curve_params;
+    //    ECPoint         public;
+    //} ServerECDHParams;
 
 
-		//ServerKeyExchange.signed_params.sha_hash
-		//    SHA(ClientHello.random + ServerHello.random +
-		//                                      ServerKeyExchange.params);
+    //       enum { ec_diffie_hellman } KeyExchangeAlgorithm;
+
+    //ec_diffie_hellman:   Indicates the ServerKeyExchange message contains
+    //   an ECDH public key.
+
+    //     select (KeyExchangeAlgorithm) {
+    //         case ec_diffie_hellman:
+    //             ServerECDHParams    params;
+    //             Signature           signed_params;
+    //     } ServerKeyExchange;
 
 
-	  //    struct {
-	  //   SignatureAndHashAlgorithm algorithm;
-	  //   opaque signature<0..2^16-1>;
-	  //} DigitallySigned;
 
-	internal class ECDHEServerKeyExchange : IHandshakeMessage
+    //  enum { ecdsa } SignatureAlgorithm;
+
+    //  select (SignatureAlgorithm) {
+    //      case ecdsa:
+    //          digitally-signed struct {
+    //              opaque sha_hash[sha_size];
+    //          };
+    //  } Signature;
+
+
+    //ServerKeyExchange.signed_params.sha_hash
+    //    SHA(ClientHello.random + ServerHello.random +
+    //                                      ServerKeyExchange.params);
+
+
+    //    struct {
+    //   SignatureAndHashAlgorithm algorithm;
+    //   opaque signature<0..2^16-1>;
+    //} DigitallySigned;
+
+    internal class ECDHEServerKeyExchange : IHandshakeMessage
 	{
-		private TEllipticCurveType _EllipticCurveType;
-		private TEllipticCurve _EllipticCurve;
-        private byte[] _PublicKeyBytes;
+        private readonly byte[] _ServerParams;
 
+        public THandshakeType MessageType => THandshakeType.ServerKeyExchange;
 
-		private byte[] _ServerParams;
-		THashAlgorithm _HashAlgorithm;
-		TSignatureAlgorithm _SignatureAlgorithm;
-		private byte[] _Signature;
-		
-		public THandshakeType MessageType
+        public TEllipticCurveType EllipticCurveType { get; private set; }
+
+        public TEllipticCurve EllipticCurve { get; private set; }
+
+        public byte[] PublicKeyBytes { get; private set; }
+
+        public THashAlgorithm HashAlgorithm { get; private set; }
+
+        public TSignatureAlgorithm SignatureAlgorithm { get; private set; }
+
+        public byte[] Signature { get; private set; }
+
+        public ECDHEServerKeyExchange() => this.EllipticCurveType = TEllipticCurveType.NamedCurve;
+
+        public ECDHEServerKeyExchange(ECDHEKeyExchange keyExchange, THashAlgorithm hashAlgorithm, 
+            TSignatureAlgorithm signatureAlgorithm, AsymmetricKeyParameter serverPrivateKey)
 		{
-			get { return THandshakeType.ServerKeyExchange; }
-		}
+            if(keyExchange == null)
+            {
+                throw new ArgumentNullException(nameof(keyExchange));
+            }
 
-        public TEllipticCurveType EllipticCurveType
-        {
-            get { return _EllipticCurveType; }
-        }
+            if(serverPrivateKey == null)
+            {
+                throw new ArgumentNullException(nameof(serverPrivateKey));
+            }
 
-        public TEllipticCurve EllipticCurve
-        {
-            get { return _EllipticCurve; }
-        }
+            this.EllipticCurveType = TEllipticCurveType.NamedCurve;
+            this.EllipticCurve = keyExchange.Curve;
+            this.HashAlgorithm = hashAlgorithm;
+            this.SignatureAlgorithm = signatureAlgorithm;
 
-        public byte[] PublicKeyBytes
-        {
-            get { return _PublicKeyBytes; }
-        }
-
-        public THashAlgorithm HashAlgorithm
-        {
-            get { return _HashAlgorithm; }
-        }
-
-        public TSignatureAlgorithm SignatureAlgorithm
-        {
-            get { return _SignatureAlgorithm; }
-        }
-
-        public byte[] Signature
-        {
-            get { return _Signature; }
-        }
-
-		public ECDHEServerKeyExchange()
-		{
-			_EllipticCurveType = TEllipticCurveType.NamedCurve;
-		}
-
-		public ECDHEServerKeyExchange(ECDHEKeyExchange keyExchange, THashAlgorithm hashAlgorithm, TSignatureAlgorithm signatureAlgorithm, AsymmetricKeyParameter serverPrivateKey)
-		{
-			_EllipticCurveType = TEllipticCurveType.NamedCurve;
-			_EllipticCurve = keyExchange.Curve;
-			_HashAlgorithm = hashAlgorithm;
-			_SignatureAlgorithm = signatureAlgorithm;
-
-			System.IO.MemoryStream stream = new System.IO.MemoryStream();
-			stream.WriteByte((byte)_EllipticCurveType);
-			NetworkByteOrderConverter.WriteUInt16(stream, (ushort)_EllipticCurve);
-			byte[] pointEncoded = keyExchange.PublicKey.Q.GetEncoded(false);
+			var stream = new System.IO.MemoryStream();
+			stream.WriteByte((byte)this.EllipticCurveType);
+			NetworkByteOrderConverter.WriteUInt16(stream, (ushort)this.EllipticCurve);
+			var pointEncoded = keyExchange.PublicKey.Q.GetEncoded(false);
 			stream.WriteByte((byte)pointEncoded.Length);
 			stream.Write(pointEncoded, 0, pointEncoded.Length);
-			_ServerParams = stream.ToArray();
+            this._ServerParams = stream.ToArray();
 
 
 			//IDigest hashMD5 = GetDigest(THashAlgorithm.MD5);
@@ -203,80 +179,113 @@ namespace DTLS
 			//signer.BlockUpdate(hash, 0, hash.Length);
 			//_Signature = signer.GenerateSignature();
 
-			ISigner signer = GetSigner(signatureAlgorithm, hashAlgorithm, serverPrivateKey);
-			byte[] clientRandomBytes = keyExchange.ClientRandom.Serialise();
-			byte[] serverRandomBytes = keyExchange.ServerRandom.Serialise();
+			var signer = this.GetSigner(signatureAlgorithm, hashAlgorithm, serverPrivateKey);
+			var clientRandomBytes = keyExchange.ClientRandom.Serialise();
+			var serverRandomBytes = keyExchange.ServerRandom.Serialise();
 			signer.BlockUpdate(clientRandomBytes, 0, clientRandomBytes.Length);
 			signer.BlockUpdate(serverRandomBytes, 0, serverRandomBytes.Length);
-			signer.BlockUpdate(_ServerParams, 0, _ServerParams.Length);
-			_Signature = signer.GenerateSignature();
-
+			signer.BlockUpdate(this._ServerParams, 0, this._ServerParams.Length);
+            this.Signature = signer.GenerateSignature();
 		}
-
 
 		public int CalculateSize(Version version)
 		{
-			int result = 0;
-			if (_ServerParams != null)
+            if(version == null)
+            {
+                throw new ArgumentNullException(nameof(version));
+            }
+
+			var result = 0;
+			if (this._ServerParams != null)
 			{
-				result += _ServerParams.Length;
+				result += this._ServerParams.Length;
 			}
 
-			if (_Signature != null)
+			if (this.Signature != null)
 			{
 				if (version >= DTLSRecord.Version1_2)
-					result += 2;
-				result += 2;
-				result += _Signature.Length;				
+                {
+                    result += 2;
+                }
+
+                result += 2;
+				result += this.Signature.Length;				
 			}
+
 			return result;
 		}
 
-        public static ECDHEServerKeyExchange Deserialise(System.IO.Stream stream, Version version)
+        public static ECDHEServerKeyExchange Deserialise(Stream stream, Version version)
         {
-            ECDHEServerKeyExchange result = new ECDHEServerKeyExchange();
-            result._EllipticCurveType = (TEllipticCurveType)stream.ReadByte();
-            result._EllipticCurve = (TEllipticCurve)NetworkByteOrderConverter.ToUInt16(stream);
-            int length = stream.ReadByte();
+            if (stream == null)
+            {
+                throw new ArgumentNullException(nameof(stream));
+            }
+
+            if (version == null)
+            {
+                throw new ArgumentNullException(nameof(version));
+            }
+
+            var result = new ECDHEServerKeyExchange
+            {
+                EllipticCurveType = (TEllipticCurveType)stream.ReadByte(),
+                EllipticCurve = (TEllipticCurve)NetworkByteOrderConverter.ToUInt16(stream)
+            };
+
+            var length = stream.ReadByte();
 			if (length > 0)
 			{
-				result._PublicKeyBytes = new byte[length];
-				stream.Read(result._PublicKeyBytes, 0, length);
+				result.PublicKeyBytes = new byte[length];
+				stream.Read(result.PublicKeyBytes, 0, length);
 			}
+
             if (version >= DTLSRecord.Version1_2)
             {
-                result._HashAlgorithm = (THashAlgorithm)stream.ReadByte();
-                result._SignatureAlgorithm = (TSignatureAlgorithm)stream.ReadByte();
+                result.HashAlgorithm = (THashAlgorithm)stream.ReadByte();
+                result.SignatureAlgorithm = (TSignatureAlgorithm)stream.ReadByte();
             }
+
             int signatureLength = NetworkByteOrderConverter.ToUInt16(stream);
             if (signatureLength > 0)
             {
-                result._Signature = new byte[signatureLength];
-                stream.Read(result._Signature, 0, signatureLength);
+                result.Signature = new byte[signatureLength];
+                stream.Read(result.Signature, 0, signatureLength);
             }
+
             return result;
         }
 
-		public void Serialise(System.IO.Stream stream, Version version)
+		public void Serialise(Stream stream, Version version)
 		{
-			if (_ServerParams != null)
+            if (stream == null)
+            {
+                throw new ArgumentNullException(nameof(stream));
+            }
+
+            if (version == null)
+            {
+                throw new ArgumentNullException(nameof(version));
+            }
+
+            if (this._ServerParams != null)
 			{
-				stream.Write(_ServerParams, 0, _ServerParams.Length);
+				stream.Write(this._ServerParams, 0, this._ServerParams.Length);
 			}
+
 			if (version >= DTLSRecord.Version1_2)
 			{
-				stream.WriteByte((byte)_HashAlgorithm);
-				stream.WriteByte((byte)_SignatureAlgorithm);
+				stream.WriteByte((byte)this.HashAlgorithm);
+				stream.WriteByte((byte)this.SignatureAlgorithm);
 			}
-			if (_Signature != null)
+
+			if (this.Signature != null)
 			{
-				NetworkByteOrderConverter.WriteUInt16(stream, (ushort)_Signature.Length);
-				stream.Write(_Signature, 0, _Signature.Length);
+				NetworkByteOrderConverter.WriteUInt16(stream, (ushort)this.Signature.Length);
+				stream.Write(this.Signature, 0, this.Signature.Length);
 			}
 		}
-
-
-
+        
 		private IDigest GetDigest(THashAlgorithm hashAlgorithm)
 		{
 			IDigest result = null;
@@ -309,28 +318,41 @@ namespace DTLS
 			return result;
 		}
 
-
 		private ISigner GetSigner(TSignatureAlgorithm signatureAlgorithm, THashAlgorithm hashAlgorithm, AsymmetricKeyParameter serverPrivateKey)
 		{
+            if(serverPrivateKey == null)
+            {
+                throw new ArgumentNullException(nameof(serverPrivateKey));
+            }
+
 			ISigner result = null;
 			switch (signatureAlgorithm)
 			{
 				case TSignatureAlgorithm.Anonymous:
-					break;
+                    {
+                        break;
+                    }
 				case TSignatureAlgorithm.RSA:
-					break;
+                    {
+                        break;
+                    }
 				case TSignatureAlgorithm.DSA:
-					break;
+                    {
+                        break;
+                    }
 				case TSignatureAlgorithm.ECDSA:
-					result = new DsaDigestSigner(new ECDsaSigner(), GetDigest(hashAlgorithm));
-					break;
+                    {
+                        result = new DsaDigestSigner(new ECDsaSigner(), this.GetDigest(hashAlgorithm));
+                        break;
+                    }
 				default:
-					break;
+                    {
+                        break;
+                    }
 			}
 			result.Init(true, serverPrivateKey);
 			//result.Init(true, new ParametersWithRandom(serverPrivateKey, this.mContext.SecureRandom));
 			return result;
 		}
-
 	}
 }

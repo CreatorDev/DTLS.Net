@@ -22,83 +22,89 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.IO;
 
 namespace DTLS
 {
-	  //    enum {
-	  //    none(0), md5(1), sha1(2), sha224(3), sha256(4), sha384(5),
-	  //    sha512(6), (255)
-	  //} HashAlgorithm;
+    //    enum {
+    //    none(0), md5(1), sha1(2), sha224(3), sha256(4), sha384(5),
+    //    sha512(6), (255)
+    //} HashAlgorithm;
 
-	  //enum { anonymous(0), rsa(1), dsa(2), ecdsa(3), (255) }
-	  //  SignatureAlgorithm;
+    //enum { anonymous(0), rsa(1), dsa(2), ecdsa(3), (255) }
+    //  SignatureAlgorithm;
 
-	  //struct {
-	  //      HashAlgorithm hash;
-	  //      SignatureAlgorithm signature;
-	  //} SignatureAndHashAlgorithm;
+    //struct {
+    //      HashAlgorithm hash;
+    //      SignatureAlgorithm signature;
+    //} SignatureAndHashAlgorithm;
 
-	  //SignatureAndHashAlgorithm
-	  //  supported_signature_algorithms<2..2^16-2>;
+    //SignatureAndHashAlgorithm
+    //  supported_signature_algorithms<2..2^16-2>;
 
-
-	internal class SignatureAlgorithmsExtension : IExtension
+    internal class SignatureAlgorithmsExtension : IExtension
 	{
-		public TExtensionType ExtensionType { get { return TExtensionType.SignatureAlgorithms; } }
+        public TExtensionType ExtensionType => TExtensionType.SignatureAlgorithms;
 
+        public List<SignatureHashAlgorithm> SupportedAlgorithms { get; private set; }
 
-		public List<SignatureHashAlgorithm> SupportedAlgorithms { get; private set; }
+        public SignatureAlgorithmsExtension() => this.SupportedAlgorithms = new List<SignatureHashAlgorithm>();
 
-		public SignatureAlgorithmsExtension()
+        public int CalculateSize()
 		{
-			SupportedAlgorithms = new List<SignatureHashAlgorithm>();
-		}
+			var result = 2;
+			if (this.SupportedAlgorithms != null)
+            {
+                result += (this.SupportedAlgorithms.Count * 2);
+            }
 
-		public int CalculateSize()
-		{
-			int result = 2;
-			if (SupportedAlgorithms != null)
-				result += (SupportedAlgorithms.Count * 2);
-			return result;
+            return result;
 		}
-
 
 		public static SignatureAlgorithmsExtension Deserialise(Stream stream)
 		{
-			SignatureAlgorithmsExtension result = new SignatureAlgorithmsExtension();
-			ushort length = NetworkByteOrderConverter.ToUInt16(stream);
-			ushort supportedAlgorithmsLength = (ushort)(length / 2);
+            if (stream == null)
+            {
+                throw new ArgumentNullException(nameof(stream));
+            }
+
+            var result = new SignatureAlgorithmsExtension();
+			var length = NetworkByteOrderConverter.ToUInt16(stream);
+			var supportedAlgorithmsLength = (ushort)(length / 2);
 			if (supportedAlgorithmsLength > 0)
 			{
 				for (uint index = 0; index < supportedAlgorithmsLength; index++)
 				{
-					THashAlgorithm hash = (THashAlgorithm)stream.ReadByte();
-					TSignatureAlgorithm signature = (TSignatureAlgorithm)stream.ReadByte();
+					var hash = (THashAlgorithm)stream.ReadByte();
+					var signature = (TSignatureAlgorithm)stream.ReadByte();
 					result.SupportedAlgorithms.Add(new SignatureHashAlgorithm() { Hash = hash, Signature = signature });
 				}
 			}
+
 			return result;
 		}
 
 		public void Serialise(Stream stream)
 		{
-            ushort length = 0;
-            if (SupportedAlgorithms == null)
-                NetworkByteOrderConverter.WriteUInt16(stream, length);
-            else
+            if (stream == null)
             {
-                length = (ushort)(SupportedAlgorithms.Count * 2);
+                throw new ArgumentNullException(nameof(stream));
+            }
+
+            ushort length = 0;
+            if (this.SupportedAlgorithms == null)
+            {
                 NetworkByteOrderConverter.WriteUInt16(stream, length);
-                for (int index = 0; index < SupportedAlgorithms.Count; index++)
-                {
-                    stream.WriteByte((byte)SupportedAlgorithms[index].Hash);
-                    stream.WriteByte((byte)SupportedAlgorithms[index].Signature);
-                }
+                return;
+            }
+
+            length = (ushort)(this.SupportedAlgorithms.Count * 2);
+            NetworkByteOrderConverter.WriteUInt16(stream, length);
+            for (var index = 0; index < this.SupportedAlgorithms.Count; index++)
+            {
+                stream.WriteByte((byte)this.SupportedAlgorithms[index].Hash);
+                stream.WriteByte((byte)this.SupportedAlgorithms[index].Signature);
             }
         }
-
 	}
 }

@@ -20,11 +20,9 @@
  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ***********************************************************************************************************************/
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using Org.BouncyCastle.Crypto.Parameters;
+using System;
+using System.IO;
 
 namespace DTLS
 {
@@ -38,82 +36,81 @@ namespace DTLS
     //} ClientKeyExchange;
     internal class ECDHEPSKClientKeyExchange : IHandshakeMessage
     {
-        private byte[] _PSKIdentity;
-        private byte[] _PublicKeyBytes;
+        public THandshakeType MessageType => THandshakeType.ClientKeyExchange;
 
-        public THandshakeType MessageType
-        {
-            get { return THandshakeType.ClientKeyExchange; }
-        }
+        public byte[] PSKIdentity { get; set; }
 
-        public byte[] PSKIdentity
-        {
-            get { return _PSKIdentity; }
-            set { _PSKIdentity = value; }
-        }
+        public byte[] PublicKeyBytes { get; private set; }
 
+        public ECDHEPSKClientKeyExchange() { }
 
-        public byte[] PublicKeyBytes
-        {
-            get { return _PublicKeyBytes; }
-        }
-
-
-        public ECDHEPSKClientKeyExchange()
-        {
-
-        }
-
-        public ECDHEPSKClientKeyExchange(ECPublicKeyParameters publicKey)
-        {
-            _PublicKeyBytes = publicKey.Q.GetEncoded();
-        }
+        public ECDHEPSKClientKeyExchange(ECPublicKeyParameters publicKey) => this.PublicKeyBytes = publicKey.Q.GetEncoded();
 
         public int CalculateSize(Version version)
         {
-            int result = 3;
-            if (_PSKIdentity != null)
-                result += _PSKIdentity.Length;
-            if (_PublicKeyBytes != null)
-                result += _PublicKeyBytes.Length;
+            var result = 3;
+            if (this.PSKIdentity != null)
+            {
+                result += this.PSKIdentity.Length;
+            }
+
+            if (this.PublicKeyBytes != null)
+            {
+                result += this.PublicKeyBytes.Length;
+            }
+
             return result;
         }
 
-        public void Serialise(System.IO.Stream stream, Version version)
+        public void Serialise(Stream stream, Version version)
         {
-            if (_PSKIdentity == null)
-                NetworkByteOrderConverter.WriteUInt16(stream, 0);
-            else
+            if (stream == null)
             {
-                NetworkByteOrderConverter.WriteUInt16(stream, (ushort)_PSKIdentity.Length);
-                stream.Write(_PSKIdentity, 0, _PSKIdentity.Length);
+                throw new ArgumentNullException(nameof(stream));
             }
 
-            if (_PublicKeyBytes == null)
+            if (this.PSKIdentity == null)
+            {
+                NetworkByteOrderConverter.WriteUInt16(stream, 0);
+            }
+            else
+            {
+                NetworkByteOrderConverter.WriteUInt16(stream, (ushort)this.PSKIdentity.Length);
+                stream.Write(this.PSKIdentity, 0, this.PSKIdentity.Length);
+            }
+
+            if (this.PublicKeyBytes == null)
             {
                 stream.WriteByte(0);
             }
             else
             {
-                stream.WriteByte((byte)_PublicKeyBytes.Length);
-                stream.Write(_PublicKeyBytes, 0, _PublicKeyBytes.Length);
+                stream.WriteByte((byte)this.PublicKeyBytes.Length);
+                stream.Write(this.PublicKeyBytes, 0, this.PublicKeyBytes.Length);
             }
         }
 
-        public static ECDHEPSKClientKeyExchange Deserialise(System.IO.Stream stream)
+        public static ECDHEPSKClientKeyExchange Deserialise(Stream stream)
         {
+            if (stream == null)
+            {
+                throw new ArgumentNullException(nameof(stream));
+            }
+
             ECDHEPSKClientKeyExchange result = null;
-            ushort pskIdentityLength = NetworkByteOrderConverter.ToUInt16(stream);
+            var pskIdentityLength = NetworkByteOrderConverter.ToUInt16(stream);
             if (pskIdentityLength > 0)
             {
-                result = new ECDHEPSKClientKeyExchange();
-                result._PSKIdentity = new byte[pskIdentityLength];
-                stream.Read(result._PSKIdentity, 0, pskIdentityLength);
-                int length = stream.ReadByte();
+                result = new ECDHEPSKClientKeyExchange
+                {
+                    PSKIdentity = new byte[pskIdentityLength]
+                };
+                stream.Read(result.PSKIdentity, 0, pskIdentityLength);
+                var length = stream.ReadByte();
                 if (length > 0)
                 {
-                    result._PublicKeyBytes = new byte[length];
-                    stream.Read(result._PublicKeyBytes, 0, length);
+                    result.PublicKeyBytes = new byte[length];
+                    stream.Read(result.PublicKeyBytes, 0, length);
                 }
             }
             return result;

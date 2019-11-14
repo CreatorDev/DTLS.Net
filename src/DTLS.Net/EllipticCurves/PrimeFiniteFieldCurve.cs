@@ -21,29 +21,25 @@
 ***********************************************************************************************************************/
 
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Numerics;
 
 namespace DTLS
 {
-	//Fp    y² = x³ + ax + b  (mod p)
+    //Fp    y² = x³ + ax + b  (mod p)
 
-	internal class PrimeFiniteFieldCurve : EllipticCurve
+    internal class PrimeFiniteFieldCurve : EllipticCurve
 	{
-		BigInteger _Prime;
+        public BigInteger Prime { get; }
 
-		public BigInteger Prime
-		{
-			get { return _Prime; }
-		}
-
-		public PrimeFiniteFieldCurve(BigInteger prime, BigInteger a, BigInteger b, BigInteger order, BigInteger cofactor, EllipticCurvePoint basePoint)
+        public PrimeFiniteFieldCurve(BigInteger prime, BigInteger a, BigInteger b, BigInteger order, BigInteger cofactor, EllipticCurvePoint basePoint)
 			:base(a, b, order, cofactor, basePoint) 
 		{
-			_Prime = prime;
-		}
+            if(basePoint == null)
+            {
+                throw new ArgumentNullException(nameof(basePoint));
+            }
 
+            this.Prime = prime;
+		}
 	}
 }

@@ -23,13 +23,9 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Text;
 
 namespace DTLS
 {
-
-
     //enum
     //{
     //    rsa_sign(1), dss_sign(2), rsa_fixed_dh(3), dss_fixed_dh(4),
@@ -56,34 +52,35 @@ namespace DTLS
 
     internal class CertificateRequest : IHandshakeMessage
     {
-        public THandshakeType MessageType
-        {
-            get { return THandshakeType.CertificateRequest; }
-        }
+        public THandshakeType MessageType => THandshakeType.CertificateRequest;
 
         public List<TClientCertificateType> CertificateTypes { get; private set; }
         public List<SignatureHashAlgorithm> SupportedAlgorithms { get; private set; }
         public List<byte[]> CertificateAuthorities { get; private set; }
 
-
         public CertificateRequest()
         {
-            CertificateTypes = new List<TClientCertificateType>();
-            SupportedAlgorithms = new List<SignatureHashAlgorithm>();
-            CertificateAuthorities = new List<byte[]>();
+            this.CertificateTypes = new List<TClientCertificateType>();
+            this.SupportedAlgorithms = new List<SignatureHashAlgorithm>();
+            this.CertificateAuthorities = new List<byte[]>();
         }
 
         public int CalculateSize(Version version)
         {
-            int result = 3 + CertificateTypes.Count;
+            if(version == null)
+            {
+                throw new ArgumentNullException(nameof(version));
+            }
+
+            var result = 3 + this.CertificateTypes.Count;
             if (version >= DTLSRecord.Version1_2)
             {
                 result += 2;
-                result += (SupportedAlgorithms.Count * 2);
+                result += (this.SupportedAlgorithms.Count * 2);
             }
-            if (CertificateAuthorities.Count > 0)
+            if (this.CertificateAuthorities.Count > 0)
             {
-                foreach (byte[] item in CertificateAuthorities)
+                foreach (var item in this.CertificateAuthorities)
                 {
                     result += item.Length;
                 }
@@ -93,38 +90,50 @@ namespace DTLS
 
         public static CertificateRequest Deserialise(Stream stream, Version version)
         {
-            CertificateRequest result = new CertificateRequest();
-            int certificateTypeCount = stream.ReadByte();
+            if(stream == null)
+            {
+                throw new ArgumentNullException(nameof(stream));
+            }
+
+            if (version == null)
+            {
+                throw new ArgumentNullException(nameof(version));
+            }
+
+            var result = new CertificateRequest();
+            var certificateTypeCount = stream.ReadByte();
             if (certificateTypeCount > 0)
             {
-                for (int index = 0; index < certificateTypeCount; index++)
+                for (var index = 0; index < certificateTypeCount; index++)
                 {
                     result.CertificateTypes.Add((TClientCertificateType)stream.ReadByte());
                 }
             }
+
             if (version >= DTLSRecord.Version1_2)
             {
-                ushort length = NetworkByteOrderConverter.ToUInt16(stream);
-                ushort supportedAlgorithmsLength = (ushort)(length / 2);
+                var length = NetworkByteOrderConverter.ToUInt16(stream);
+                var supportedAlgorithmsLength = (ushort)(length / 2);
                 if (supportedAlgorithmsLength > 0)
                 {
                     for (uint index = 0; index < supportedAlgorithmsLength; index++)
                     {
-                        THashAlgorithm hash = (THashAlgorithm)stream.ReadByte();
-                        TSignatureAlgorithm signature = (TSignatureAlgorithm)stream.ReadByte();
+                        var hash = (THashAlgorithm)stream.ReadByte();
+                        var signature = (TSignatureAlgorithm)stream.ReadByte();
                         result.SupportedAlgorithms.Add(new SignatureHashAlgorithm() { Hash = hash, Signature = signature });
                     }
                 }
             }
-            ushort certificateAuthoritiesLength = NetworkByteOrderConverter.ToUInt16(stream);
+
+            var certificateAuthoritiesLength = NetworkByteOrderConverter.ToUInt16(stream);
             if (certificateAuthoritiesLength > 0)
             {
-                int read = 0;
+                var read = 0;
                 while(certificateAuthoritiesLength > read)
                 {
-                    ushort distinguishedNameLength = NetworkByteOrderConverter.ToUInt16(stream);
+                    var distinguishedNameLength = NetworkByteOrderConverter.ToUInt16(stream);
                     read += (2 + distinguishedNameLength);
-                    byte[] distinguishedName = new byte[distinguishedNameLength];
+                    var distinguishedName = new byte[distinguishedNameLength];
                     stream.Read(distinguishedName, 0, distinguishedNameLength);
                     result.CertificateAuthorities.Add(distinguishedName);
                 }
@@ -134,38 +143,50 @@ namespace DTLS
 
         public void Serialise(Stream stream, Version version)
         {
-            stream.WriteByte((byte)CertificateTypes.Count);
-            foreach (TClientCertificateType item in CertificateTypes)
+            if (stream == null)
+            {
+                throw new ArgumentNullException(nameof(stream));
+            }
+
+            if (version == null)
+            {
+                throw new ArgumentNullException(nameof(version));
+            }
+
+            stream.WriteByte((byte)this.CertificateTypes.Count);
+            foreach (var item in this.CertificateTypes)
             {
                 stream.WriteByte((byte)item);
             }
+
             if (version >= DTLSRecord.Version1_2)
             {
-                NetworkByteOrderConverter.WriteUInt16(stream, (ushort)(SupportedAlgorithms.Count * 2));
-                foreach (SignatureHashAlgorithm item in SupportedAlgorithms)
+                NetworkByteOrderConverter.WriteUInt16(stream, (ushort)(this.SupportedAlgorithms.Count * 2));
+                foreach (var item in this.SupportedAlgorithms)
                 {
                     stream.WriteByte((byte)item.Hash);
                     stream.WriteByte((byte)item.Signature);
                 }
             }
+
             ushort certificateAuthoritiesSize = 0;
-            if (CertificateAuthorities.Count > 0)
+            if (this.CertificateAuthorities.Count > 0)
             {
-                foreach (byte[] item in CertificateAuthorities)
+                foreach (var item in this.CertificateAuthorities)
                 {
                     certificateAuthoritiesSize += (ushort)item.Length;
                 }
             }
+
             NetworkByteOrderConverter.WriteUInt16(stream, certificateAuthoritiesSize);
-            if (CertificateAuthorities.Count > 0)
+            if (this.CertificateAuthorities.Count > 0)
             {
-                foreach (byte[] item in CertificateAuthorities)
+                foreach (var item in this.CertificateAuthorities)
                 {
                     NetworkByteOrderConverter.WriteUInt16(stream, (ushort)item.Length);
                     stream.Write(item, 0, item.Length);
                 }
             }
         }
-
     }
 }

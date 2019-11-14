@@ -20,15 +20,11 @@
  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ***********************************************************************************************************************/
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 
 namespace DTLS
 {
-	// RFC 4492 5.1.1
-	internal enum TEllipticCurve
+    // RFC 4492 5.1.1
+    internal enum TEllipticCurve
 	{
 		sect163k1 = 1, sect163r1 = 2, sect163r2 = 3,
 		sect193r1 = 4, sect193r2 = 5, sect233k1 = 6,
@@ -40,6 +36,6 @@ namespace DTLS
 		secp256k1 = 22, secp256r1 = 23, secp384r1 = 24,
 		secp521r1 = 25,
 		arbitrary_explicit_prime_curves = 0xFF01,
-		arbitrary_explicit_char2_curves = 0xFF02,
+		arbitrary_explicit_char2_curves = 0xFF02
 	}
 }

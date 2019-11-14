@@ -22,41 +22,41 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 
 namespace DTLS
 {
     internal class DTLSRecords
     {
-        private List<DTLSRecord> _Records;
+        private readonly List<DTLSRecord> _Records;
 
-        public DTLSRecords()
-        {
-            _Records = new List<DTLSRecord>();
-        }
+        public DTLSRecords() => this._Records = new List<DTLSRecord>();
 
         public void Add(DTLSRecord record)
         {
-            lock (_Records)
+            if (record == null)
             {
-                int index = 0;
-                bool added = false;
-                while (index < _Records.Count)
+                throw new ArgumentNullException(nameof(record));
+            }
+
+            lock (this._Records)
+            {
+                var index = 0;
+                var added = false;
+                while (index < this._Records.Count)
                 {
-                    if (record.Epoch < _Records[index].Epoch)
+                    if (record.Epoch < this._Records[index].Epoch)
                     {
-                        _Records.Insert(index, record);
+                        this._Records.Insert(index, record);
                         added = true;
                         break;
                     }
-                    if ((record.SequenceNumber < _Records[index].SequenceNumber) && (record.Epoch == _Records[index].Epoch))
+                    if ((record.SequenceNumber < this._Records[index].SequenceNumber) && (record.Epoch == this._Records[index].Epoch))
                     {
-                        _Records.Insert(index, record);
+                        this._Records.Insert(index, record);
                         added = true;
                         break;
                     }
-                    else if ((record.SequenceNumber == _Records[index].SequenceNumber) && (record.Epoch == _Records[index].Epoch))
+                    else if ((record.SequenceNumber == this._Records[index].SequenceNumber) && (record.Epoch == this._Records[index].Epoch))
                     {
                         added = true;
                         break;
@@ -64,7 +64,9 @@ namespace DTLS
                     index++;
                 }
                 if (!added)
-                    _Records.Add(record);
+                {
+                    this._Records.Add(record);
+                }
             }
         }
 
@@ -76,19 +78,21 @@ namespace DTLS
         public DTLSRecord PeekRecord()
         {
             DTLSRecord result = null;
-            lock (_Records)
+            lock (this._Records)
             {
-                if (_Records.Count > 0)
-                    result = _Records[0];
+                if (this._Records.Count > 0)
+                {
+                    result = this._Records[0];
+                }
             }
             return result;
         }
 
         public void RemoveRecord()
         {
-            lock (_Records)
+            lock (this._Records)
             {
-                _Records.RemoveAt(0);
+                this._Records.RemoveAt(0);
             }
         }
     }

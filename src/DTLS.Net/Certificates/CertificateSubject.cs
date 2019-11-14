@@ -22,10 +22,6 @@
 
 using Org.BouncyCastle.Asn1.X509;
 using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 
 namespace DTLS
 {
@@ -43,40 +39,42 @@ namespace DTLS
 
         public string Country { get; set; }
 
-        public CertificateSubject()
-        {
-
-        }
+        public CertificateSubject() { }
 
         internal CertificateSubject(X509CertificateStructure cert)
         {
-            IList ids = cert.Subject.GetOidList();
-            IList values = cert.Subject.GetValueList();
-            for (int index = 0; index < ids.Count; index++)
+            if(cert == null)
+            {
+                throw new ArgumentNullException(nameof(cert));
+            }
+
+            var ids = cert.Subject.GetOidList();
+            var values = cert.Subject.GetValueList();
+            for (var index = 0; index < ids.Count; index++)
             {
                 if (X509Name.CN.Equals(ids[index]))
                 {
-                    CommonName = (string)values[index];
+                    this.CommonName = (string)values[index];
                 }
                 else if (X509Name.O.Equals(ids[index]))
                 {
-                    Organistion = (string)values[index];
+                    this.Organistion = (string)values[index];
                 }
                 else if (X509Name.OU.Equals(ids[index]))
                 {
-                    OrganistionUnit = (string)values[index];
+                    this.OrganistionUnit = (string)values[index];
                 }
                 else if (X509Name.L.Equals(ids[index]))
                 {
-                    Location = (string)values[index];
+                    this.Location = (string)values[index];
                 }
                 else if (X509Name.ST.Equals(ids[index]))
                 {
-                    State = (string)values[index];
+                    this.State = (string)values[index];
                 }
                 else if (X509Name.C.Equals(ids[index]))
                 {
-                    Country = (string)values[index];
+                    this.Country = (string)values[index];
                 }
             }
         }    

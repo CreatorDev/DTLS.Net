@@ -21,66 +21,63 @@
 ***********************************************************************************************************************/
 
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.IO;
 using System.Security.Cryptography;
 
 namespace DTLS
 {
-		 //    struct {
-		 //    uint32 gmt_unix_time;
-		 //    opaque random_bytes[28];
-		 //} Random;
+    //    struct {
+    //    uint32 gmt_unix_time;
+    //    opaque random_bytes[28];
+    //} Random;
 
-	internal class RandomData
+    internal class RandomData
 	{
-		private uint _UnixTime;
-		private byte[] _RandomBytes = new byte[28];
+        public uint UnixTime { get; set; }
 
-		public uint UnixTime
+        public byte[] RandomBytes { get; set; } = new byte[28];
+
+        public static RandomData Deserialise(Stream stream)
 		{
-			get { return _UnixTime; }
-			set { _UnixTime = value; }
-		}
+            if (stream == null)
+            {
+                throw new ArgumentNullException(nameof(stream));
+            }
 
-		public byte[] RandomBytes
-		{
-			get { return _RandomBytes; }
-			set { _RandomBytes = value; }
-		}
+            var result = new RandomData
+            {
+                UnixTime = NetworkByteOrderConverter.ToUInt32(stream)
+            };
 
-
-		public static RandomData Deserialise(Stream stream)
-		{
-			RandomData result = new RandomData();
-			result._UnixTime = NetworkByteOrderConverter.ToUInt32(stream);
-			stream.Read(result._RandomBytes, 0, 28);
+            stream.Read(result.RandomBytes, 0, 28);
 			return result;
 		}
 
 		public void Generate()
 		{
-            TimeSpan unixTime = DateTime.UtcNow.Subtract(TLSUtils.UnixEpoch);
-			_UnixTime = (uint)unixTime.TotalSeconds;
-			RNGCryptoServiceProvider random = new RNGCryptoServiceProvider();
-			random.GetBytes(_RandomBytes);
+            var unixTime = DateTime.UtcNow.Subtract(TLSUtils.UnixEpoch);
+            this.UnixTime = (uint)unixTime.TotalSeconds;
+			var random = new RNGCryptoServiceProvider();
+			random.GetBytes(this.RandomBytes);
 		}
 
 		public byte[] Serialise()
 		{
-			byte[] result = new byte[32];
-			NetworkByteOrderConverter.WriteUInt32(result,0, _UnixTime);
-			Array.Copy(_RandomBytes, 0, result, 4, 28);
+			var result = new byte[32];
+			NetworkByteOrderConverter.WriteUInt32(result,0, this.UnixTime);
+			Array.Copy(this.RandomBytes, 0, result, 4, 28);
 			return result;
 		}
 
-		public void Serialise(System.IO.Stream stream)
+		public void Serialise(Stream stream)
 		{
-			NetworkByteOrderConverter.WriteUInt32(stream, _UnixTime);
-			stream.Write(_RandomBytes, 0, 28);
-		}
+            if (stream == null)
+            {
+                throw new ArgumentNullException(nameof(stream));
+            }
 
+            NetworkByteOrderConverter.WriteUInt32(stream, this.UnixTime);
+			stream.Write(this.RandomBytes, 0, 28);
+		}
 	}
 }

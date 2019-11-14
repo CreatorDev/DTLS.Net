@@ -25,56 +25,78 @@ using System.Collections.Generic;
 using System.Text;
 using System.Xml;
 using System.IO;
+using System.Linq;
 
 namespace DTLS
 {
     public class PSKIdentities: IEqualityComparer<byte[]>
     {
-        private Dictionary<byte[], PSKIdentity> _Identities;
+        private readonly Dictionary<byte[], PSKIdentity> _Identities;
 
-        public int Count { get {return _Identities.Count;} }
+        public int Count => this._Identities.Count;
 
-        public PSKIdentities()
-        {
-            _Identities = new Dictionary<byte[], PSKIdentity>(10,this);
-        }
+        public PSKIdentities() => this._Identities = new Dictionary<byte[], PSKIdentity>(10, this);
 
         public void AddIdentity(byte[] identity, byte[] key)
         {
-            PSKIdentity pskIdentity = new PSKIdentity() { Identity = identity, Key = key };
-            _Identities.Add(pskIdentity.Identity, pskIdentity);
+            if(identity == null)
+            {
+                throw new ArgumentNullException(nameof(identity));
+            }
+
+            if (key == null)
+            {
+                throw new ArgumentNullException(nameof(key));
+            }
+
+            var pskIdentity = new PSKIdentity() { Identity = identity, Key = key };
+            this._Identities.Add(pskIdentity.Identity, pskIdentity);
         }
         
         public void AddIdentity(string identity, byte[] key)
         {
-            PSKIdentity pskIdentity = new PSKIdentity() { Identity = Encoding.UTF8.GetBytes(identity), Key = key };
-            _Identities.Add(pskIdentity.Identity, pskIdentity);
+            if (string.IsNullOrWhiteSpace(identity))
+            {
+                throw new ArgumentNullException(nameof(identity));
+            }
+
+            if (key == null)
+            {
+                throw new ArgumentNullException(nameof(key));
+            }
+
+            var pskIdentity = new PSKIdentity() { Identity = Encoding.UTF8.GetBytes(identity), Key = key };
+            this._Identities.Add(pskIdentity.Identity, pskIdentity);
         }
 
         public byte[] GetKey(byte[] identity)
         {
-            byte[] result = null;
-            PSKIdentity pskIdentity;
-            if (_Identities.TryGetValue(identity, out pskIdentity))
+            if (identity == null)
             {
-                result = pskIdentity.Key;
+                throw new ArgumentNullException(nameof(identity));
             }
-            return result;
+            
+            if (this._Identities.TryGetValue(identity, out var pskIdentity))
+            {
+                return pskIdentity.Key;
+            }
+
+            return null;
         }
 
         internal PSKIdentity GetRandom()
         {
             PSKIdentity result = null;
-            if (_Identities.Count > 0)
+            if (this._Identities.Count > 0)
             {
-                Random random = new Random();
-                int index = random.Next(_Identities.Count);
-                int count = 0;
-                foreach (byte[] identity in _Identities.Keys)
+                var random = new Random();
+                var index = random.Next(this._Identities.Count);
+                var count = 0;
+                foreach (var identity in this._Identities.Keys)
                 {
                     if (count == index)
                     {
-                        _Identities.TryGetValue(identity, out result);
+                        this._Identities.TryGetValue(identity, out result);
                         break;
                     }
                     count++;
@@ -85,9 +107,14 @@ namespace DTLS
 
         private static byte[] HexToBytes(string hex)
         {
-            byte[] result = new byte[hex.Length / 2];
-            int count = 0;
-            for (int index = 0; index < hex.Length; index += 2)
+            if (string.IsNullOrWhiteSpace(hex))
+            {
+                throw new ArgumentNullException(nameof(hex));
+            }
+
+            var result = new byte[hex.Length / 2];
+            var count = 0;
+            for (var index = 0; index < hex.Length; index += 2)
             {
                 result[count] = Convert.ToByte(hex.Substring(index, 2), 16);
                 count++;
@@ -97,31 +124,45 @@ namespace DTLS
 
         public void LoadFromFile(string fileName)
         {
-            if (File.Exists(fileName))
+            if (string.IsNullOrWhiteSpace(fileName))
             {
-                using (XmlReader reader = XmlReader.Create(fileName))
+                throw new ArgumentNullException(nameof(fileName));
+            }
+
+            if (!File.Exists(fileName))
+            {
+                return;
+            }
+
+            using (var reader = XmlReader.Create(fileName))
+            {
+                while (reader.Read())
                 {
-                    while (reader.Read())
+                    if ((reader.NodeType != XmlNodeType.Element) || (reader.Name != "Identity") || !reader.HasAttributes)
                     {
-                        if ((reader.NodeType == XmlNodeType.Element) && (reader.Name == "Identity"))
+                        continue;
+                    }
+
+                    string name = null;
+                    byte[] key = null;
+
+                    reader.MoveToFirstAttribute();
+                    do
+                    {
+                        if (reader.Name == "name")
                         {
-                            if (reader.HasAttributes)
-                            {
-                                string name = null;
-                                byte[] key = null;
-                                reader.MoveToFirstAttribute();
-                                do
-                                {
-                                    if (reader.Name == "name")
-                                        name = reader.Value;
-                                    else if (reader.Name == "key")
-                                        key = HexToBytes(reader.Value);
-                                } while (reader.MoveToNextAttribute());
-                                reader.MoveToElement();
-                                if ((name != null) && (key != null))
-                                    AddIdentity(name, key);
-                            }
+                            name = reader.Value;
                         }
+                        else if (reader.Name == "key")
+                        {
+                            key = HexToBytes(reader.Value);
+                        }
+                    } while (reader.MoveToNextAttribute());
+
+                    reader.MoveToElement();
+                    if ((name != null) && (key != null))
+                    {
+                        this.AddIdentity(name, key);
                     }
                 }
             }
@@ -129,34 +170,59 @@ namespace DTLS
 
         bool IEqualityComparer<byte[]>.Equals(byte[] x, byte[] y)
         {
-            return TLSUtils.ByteArrayCompare(x, y);
+            if(x == null)
+            {
+                throw new ArgumentNullException(nameof(x));
+            }
+
+            if(y == null)
+            {
+                throw new ArgumentNullException(nameof(y));
+            }
+
+            return x.SequenceEqual(y);
         }
 
         int IEqualityComparer<byte[]>.GetHashCode(byte[] obj)
         {
-            int result = 0;
-            for (int i = 0; i < obj.Length; i++)
+            if (obj == null)
+            {
+                throw new ArgumentNullException(nameof(obj));
+            }
+
+            var result = 0;
+            for (var i = 0; i < obj.Length; i++)
             {
                 switch (i % 4)
                 {
                     case 0:
-                        result = result | obj[i];
-                        break;
+                        {
+                            result = result | obj[i];
+                            break;
+                        }
                     case 1:
-                        result = result | (obj[i] << 8);
-                        break;
+                        {
+                            result = result | (obj[i] << 8);
+                            break;
+                        }
                     case 2:
-                        result = result | (obj[i] << 16);
-                        break;
+                        {
+                            result = result | (obj[i] << 16);
+                            break;
+                        }
                     case 3:
-                        result = result | (obj[i] << 24);
-                        break;
+                        {
+                            result = result | (obj[i] << 24);
+                            break;
+                        }
                     default:
-                        break;
+                        {
+                            break;
+                        }
                 }                
             }
+
             return result;
         }
-
     }
 }

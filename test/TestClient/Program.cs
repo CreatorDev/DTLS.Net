@@ -22,11 +22,8 @@
 
 using DTLS;
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Net;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace TestClient
 {
@@ -34,9 +31,9 @@ namespace TestClient
     {
         static byte[] HexToBytes(string hex)
         {
-            byte[] result = new byte[hex.Length / 2];
-            int count = 0;
-            for (int index = 0; index < hex.Length; index += 2)
+            var result = new byte[hex.Length / 2];
+            var count = 0;
+            for (var index = 0; index < hex.Length; index += 2)
             {
                 result[count] = Convert.ToByte(hex.Substring(index, 2), 16);
                 count++;
@@ -46,12 +43,12 @@ namespace TestClient
 
         public static void Main(string[] args)
         {
-            bool exit = false;
+            var exit = false;
             Console.WriteLine("Press any key to Connect to Server");
             Console.ReadKey(true);
-            Client client = new Client(new IPEndPoint(IPAddress.Any, 56239));
+            var client = new Client(new IPEndPoint(IPAddress.Any, 56239));
             client.PSKIdentities.AddIdentity(Encoding.UTF8.GetBytes("oFIrQFrW8EWcZ5u7eGfrkw"), HexToBytes("7CCDE14A5CF3B71C0C08C8B7F9E5"));
-            //client.LoadCertificateFromPem(@"Client.pem");
+            client.LoadCertificateFromPem(@"Client.pem");
             client.SupportedCipherSuites.Add(TCipherSuite.TLS_PSK_WITH_AES_128_CCM_8);
             client.ConnectToServer(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 5684));
             Console.CancelKeyPress += delegate (object sender, ConsoleCancelEventArgs e)
@@ -66,7 +63,7 @@ namespace TestClient
             {
                 if (Console.KeyAvailable)
                 {
-                    ConsoleKeyInfo pressedKey = Console.ReadKey(true);
+                    var pressedKey = Console.ReadKey(true);
                     client.Send(Encoding.UTF8.GetBytes(pressedKey.KeyChar.ToString()));
                 }
             }

@@ -22,46 +22,46 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.IO;
 
 namespace DTLS
 {
-	//rfc4492 section 5.1.2
-	//    enum { uncompressed (0), ansiX962_compressed_prime (1),
-	//       ansiX962_compressed_char2 (2), reserved (248..255)
-	//} ECPointFormat;
+    //rfc4492 section 5.1.2
+    //    enum { uncompressed (0), ansiX962_compressed_prime (1),
+    //       ansiX962_compressed_char2 (2), reserved (248..255)
+    //} ECPointFormat;
 
-	//struct {
-	//    ECPointFormat ec_point_format_list<1..2^8-1>
-	//} ECPointFormatList;
-	internal class EllipticCurvePointFormatsExtension: IExtension
+    //struct {
+    //    ECPointFormat ec_point_format_list<1..2^8-1>
+    //} ECPointFormatList;
+    internal class EllipticCurvePointFormatsExtension: IExtension
 	{
-		List<TEllipticCurvePointFormat> _SupportedPointFormats;
+        public TExtensionType ExtensionType => TExtensionType.EllipticCurvePointFormats;
 
+        public List<TEllipticCurvePointFormat> SupportedPointFormats { get; }
 
-		public TExtensionType ExtensionType { get { return TExtensionType.EllipticCurvePointFormats;} }
+        public EllipticCurvePointFormatsExtension() => this.SupportedPointFormats = new List<TEllipticCurvePointFormat>();
 
-		public List<TEllipticCurvePointFormat> SupportedPointFormats { get { return _SupportedPointFormats; } }
-
-		public EllipticCurvePointFormatsExtension()
+        public int CalculateSize()
 		{
-			_SupportedPointFormats = new List<TEllipticCurvePointFormat>();
-		}
-		
-		public int CalculateSize()
-		{
-			int result = 1;
-			if (_SupportedPointFormats != null)
-				result += _SupportedPointFormats.Count;
-			return result;
+			var result = 1;
+			if (this.SupportedPointFormats != null)
+            {
+                result += this.SupportedPointFormats.Count;
+            }
+
+            return result;
 		}
 
 		public static EllipticCurvePointFormatsExtension Deserialise(Stream stream)
 		{
-			EllipticCurvePointFormatsExtension result = new EllipticCurvePointFormatsExtension();
-			int length = stream.ReadByte();
+            if(stream == null)
+            {
+                throw new ArgumentNullException(nameof(stream));
+            }
+
+			var result = new EllipticCurvePointFormatsExtension();
+			var length = stream.ReadByte();
 			if (length > 0)
 			{
 				for (uint index = 0; index < length; index++)
@@ -74,12 +74,16 @@ namespace DTLS
 
 		public void Serialise(Stream stream)
 		{
-            stream.WriteByte((byte)_SupportedPointFormats.Count);
-            foreach (TEllipticCurvePointFormat item in _SupportedPointFormats)
+            if (stream == null)
+            {
+                throw new ArgumentNullException(nameof(stream));
+            }
+
+            stream.WriteByte((byte)this.SupportedPointFormats.Count);
+            foreach (var item in this.SupportedPointFormats)
             {
                 stream.WriteByte((byte)item);
             }
 		}
-
 	}	
 }

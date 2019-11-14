@@ -20,13 +20,9 @@
  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ***********************************************************************************************************************/
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Net;
-using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Crypto.Tls;
+using System;
+using System.Net;
 
 namespace DTLS
 {
@@ -62,52 +58,48 @@ namespace DTLS
         public Session()
         {
             this.Handshake = new HandshakeInfo();
-            Records = new DTLSRecords();
+            this.Records = new DTLSRecords();
         }
 
 
         public void ChangeEpoch()
         {
-            Epoch++;
-            _SequenceNumber = 0;
+            this.Epoch++;
+            this._SequenceNumber = 0;
         }
 
         public long NextSequenceNumber()
         {
-            long result = _SequenceNumber++;
+            var result = this._SequenceNumber++;
             return result;
         }
 
 
         internal bool IsEncypted(DTLSRecord record)
         {
-            bool result = false;
-            if (EncyptedClientEpoch.HasValue)
-                result = record.Epoch == EncyptedClientEpoch.Value;
+            var result = false;
+            if (this.EncyptedClientEpoch.HasValue)
+            {
+                result = record.Epoch == this.EncyptedClientEpoch.Value;
+            }
+
             return result;
         }
 
         internal void Reset()
         {
-            Epoch = 0;
-            _SequenceNumber = 0;
-            Cipher = null;
-            ClientEpoch = 0;
-            ClientSequenceNumber = 0;
-            EncyptedClientEpoch = null;
-            PSKIdentity = null;
-            CertificateInfo = null;
-            Records.Clear();
+            this.Epoch = 0;
+            this._SequenceNumber = 0;
+            this.Cipher = null;
+            this.ClientEpoch = 0;
+            this.ClientSequenceNumber = 0;
+            this.EncyptedClientEpoch = null;
+            this.PSKIdentity = null;
+            this.CertificateInfo = null;
+            this.Records.Clear();
             this.Handshake = new HandshakeInfo();
         }
 
-        internal void SetEncyptChange(DTLSRecord record)
-        {
-            EncyptedClientEpoch = (ushort)(record.Epoch + 1);
-        }
-
-
-
+        internal void SetEncyptChange(DTLSRecord record) => this.EncyptedClientEpoch = (ushort)(record.Epoch + 1);
     }
-
 }

@@ -20,10 +20,6 @@
  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ***********************************************************************************************************************/
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Crypto.Generators;
 using Org.BouncyCastle.Crypto.Parameters;
@@ -31,14 +27,14 @@ using Org.BouncyCastle.Security;
 
 namespace DTLS
 {
-	//Elliptic Curve Diffie-Hellman
-	internal class ECDHE
+    //Elliptic Curve Diffie-Hellman
+    internal class ECDHE
 	{
 		public AsymmetricCipherKeyPair GenerateEphemeralKey(TEllipticCurve curve)
 		{
-			ECDomainParameters ecParams = EllipticCurveFactory.GetEllipticCurveParameters(curve);					 
-			ECKeyPairGenerator keyPairGenerator = new ECKeyPairGenerator();
-			SecureRandom random = new SecureRandom();
+			var ecParams = EllipticCurveFactory.GetEllipticCurveParameters(curve);
+			var keyPairGenerator = new ECKeyPairGenerator();
+			var random = new SecureRandom();
 			keyPairGenerator.Init(new ECKeyGenerationParameters(ecParams, random));
 			return keyPairGenerator.GenerateKeyPair();
 		}

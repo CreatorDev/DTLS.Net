@@ -21,143 +21,135 @@
 ***********************************************************************************************************************/
 
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.IO;
 
 namespace DTLS
 {
 
-   //    struct {
-   //    ProtocolVersion server_version;
-   //    Random random;
-   //    SessionID session_id;
-   //    CipherSuite cipher_suite;
-   //    CompressionMethod compression_method;
-   //    select (extensions_present) {
-   //        case false:
-   //            struct {};
-   //        case true:
-   //            Extension extensions<0..2^16-1>;
-   //    };
-   //} ServerHello;
+    //    struct {
+    //    ProtocolVersion server_version;
+    //    Random random;
+    //    SessionID session_id;
+    //    CipherSuite cipher_suite;
+    //    CompressionMethod compression_method;
+    //    select (extensions_present) {
+    //        case false:
+    //            struct {};
+    //        case true:
+    //            Extension extensions<0..2^16-1>;
+    //    };
+    //} ServerHello;
 
-	internal class ServerHello : IHandshakeMessage
+    internal class ServerHello : IHandshakeMessage
 	{
 		public static Version DefaultVersion = new Version(1, 0);
 
-		Version _ServerVersion;
-		RandomData _Random;
-		byte[] _SessionID;
-		ushort _CipherSuite;
-		byte _CompressionMethod;
-		Extensions _Extensions;
-		
-		public THandshakeType MessageType { get { return THandshakeType.ServerHello; } }
+        public THandshakeType MessageType => THandshakeType.ServerHello;
 
+        public Version ServerVersion { get; set; }
 
-		public Version ServerVersion
+        public RandomData Random { get; set; }
+
+        public byte[] SessionID { get; set; }
+
+        public ushort CipherSuite { get; set; }
+
+        public byte CompressionMethod { get; set; }
+
+        public Extensions Extensions { get; set; }
+
+        public ServerHello() => this.ServerVersion = DefaultVersion;
+
+        public void AddExtension(IExtension extension)
 		{
-			get { return _ServerVersion; }
-			set { _ServerVersion = value; }
-		}
+            if (extension == null)
+            {
+                throw new ArgumentNullException(nameof(extension));
+            }
 
-		public RandomData Random
-		{
-			get { return _Random; }
-			set { _Random = value; }
-		}
-
-
-		public byte[] SessionID
-		{
-			get { return _SessionID; }
-			set { _SessionID = value; }
-		}
-
-		public ushort CipherSuite
-		{
-			get { return _CipherSuite; }
-			set { _CipherSuite = value; }
-		}
-
-		public byte CompressionMethod
-		{
-			get { return _CompressionMethod; }
-			set { _CompressionMethod = value; }
-		}
-
-		public Extensions Extensions
-		{
-			get { return _Extensions; }
-			set { _Extensions = value; }
-		}
-
-		public ServerHello()
-		{
-			_ServerVersion = DefaultVersion;
-		}
-
-		public void AddExtension(IExtension extension)
-		{
-			if (_Extensions == null)
+            if (this.Extensions == null)
 			{
-				_Extensions = new Extensions();
+                this.Extensions = new Extensions();
 			}
-			Extension item = new Extension();
-			item.ExtensionType = extension.ExtensionType;
-			item.SpecifcExtension = extension;
-			_Extensions.Add(item);
+
+            var item = new Extension
+            {
+                ExtensionType = extension.ExtensionType,
+                SpecificExtension = extension
+            };
+
+            this.Extensions.Add(item);
 		}
 
 		public int CalculateSize(Version version)
 		{
-			int result = 38; //Version + Length of cookie
-			if (_SessionID != null)
-				result += _SessionID.Length;
-			if (_Extensions != null)
-				result += _Extensions.CalculateSize();
-			return result;
+            var result = 38; //Version + Length of cookie
+			if (this.SessionID != null)
+            {
+                result += this.SessionID.Length;
+            }
+
+            if (this.Extensions != null)
+            {
+                result += this.Extensions.CalculateSize();
+            }
+
+            return result;
 		}
 
 		public static ServerHello Deserialise(Stream stream)
 		{
-			ServerHello result = new ServerHello();
-			result._ServerVersion = new Version(255 - stream.ReadByte(), 255 - stream.ReadByte());
-			result._Random = RandomData.Deserialise(stream);
-			int length = stream.ReadByte();
+            if (stream == null)
+            {
+                throw new ArgumentNullException(nameof(stream));
+            }
+
+            var result = new ServerHello
+            {
+                ServerVersion = new Version(255 - stream.ReadByte(), 255 - stream.ReadByte()),
+                Random = RandomData.Deserialise(stream)
+            };
+
+            var length = stream.ReadByte();
 			if (length > 0)
 			{
-				result._SessionID = new byte[length];
-				stream.Read(result._SessionID, 0, length);
+				result.SessionID = new byte[length];
+				stream.Read(result.SessionID, 0, length);
 			}
-			result._CipherSuite = NetworkByteOrderConverter.ToUInt16(stream);
-			result._CompressionMethod = (byte)stream.ReadByte();
-			result._Extensions = Extensions.Deserialise(stream, false);
+
+			result.CipherSuite = NetworkByteOrderConverter.ToUInt16(stream);
+			result.CompressionMethod = (byte)stream.ReadByte();
+			result.Extensions = Extensions.Deserialise(stream, false);
 			return result;
 		}
 
-		public void Serialise(System.IO.Stream stream, Version version)
+		public void Serialise(Stream stream, Version version)
 		{
-			stream.WriteByte((byte)(255 - _ServerVersion.Major));
-			stream.WriteByte((byte)(255 - _ServerVersion.Minor));
-			_Random.Serialise(stream);
-			if (_SessionID == null)
+            if (stream == null)
+            {
+                throw new ArgumentNullException(nameof(stream));
+            }
+            
+            stream.WriteByte((byte)(255 - this.ServerVersion.Major));
+			stream.WriteByte((byte)(255 - this.ServerVersion.Minor));
+            this.Random.Serialise(stream);
+
+			if (this.SessionID == null)
 			{
 				stream.WriteByte(0);
 			}
 			else
 			{
-				stream.WriteByte((byte)_SessionID.Length);
-				stream.Write(_SessionID, 0, _SessionID.Length);
+				stream.WriteByte((byte)this.SessionID.Length);
+				stream.Write(this.SessionID, 0, this.SessionID.Length);
 			}
-			NetworkByteOrderConverter.WriteUInt16(stream, _CipherSuite);
-			stream.WriteByte(_CompressionMethod);
-			if (_Extensions != null)
-				_Extensions.Serialise(stream);
-		}
 
-
+			NetworkByteOrderConverter.WriteUInt16(stream, this.CipherSuite);
+			stream.WriteByte(this.CompressionMethod);
+			if (this.Extensions != null)
+            {
+                this.Extensions.Serialise(stream);
+            }
+        }
 	}
 }
