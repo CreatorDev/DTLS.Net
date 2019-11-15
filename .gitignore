@@ -1,0 +1,9 @@
+/.vs
+/DTLS.Net/bin
+/DTLS.Net/obj
+/MyTestClient/bin
+/MyTestClient/obj
+/TestClient/bin
+/TestClient/obj
+/TestServer/bin
+/TestServer/obj
