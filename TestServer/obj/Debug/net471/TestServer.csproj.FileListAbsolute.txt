@@ -1,0 +1,13 @@
+C:\Users\kmiller\source\repos\DTLS.Net\TestServer\bin\Debug\net471\TestServer.exe.config
+C:\Users\kmiller\source\repos\DTLS.Net\TestServer\bin\Debug\net471\TestServer.exe
+C:\Users\kmiller\source\repos\DTLS.Net\TestServer\bin\Debug\net471\TestServer.pdb
+C:\Users\kmiller\source\repos\DTLS.Net\TestServer\bin\Debug\net471\BouncyCastle.Crypto.dll
+C:\Users\kmiller\source\repos\DTLS.Net\TestServer\bin\Debug\net471\System.Security.Cryptography.Cng.dll
+C:\Users\kmiller\source\repos\DTLS.Net\TestServer\bin\Debug\net471\DTLS.Net.dll
+C:\Users\kmiller\source\repos\DTLS.Net\TestServer\bin\Debug\net471\DTLS.Net.pdb
+C:\Users\kmiller\source\repos\DTLS.Net\TestServer\obj\Debug\net471\TestServer.csprojAssemblyReference.cache
+C:\Users\kmiller\source\repos\DTLS.Net\TestServer\obj\Debug\net471\TestServer.AssemblyInfoInputs.cache
+C:\Users\kmiller\source\repos\DTLS.Net\TestServer\obj\Debug\net471\TestServer.AssemblyInfo.cs
+C:\Users\kmiller\source\repos\DTLS.Net\TestServer\obj\Debug\net471\TestServer.csproj.CopyComplete
+C:\Users\kmiller\source\repos\DTLS.Net\TestServer\obj\Debug\net471\TestServer.exe
+C:\Users\kmiller\source\repos\DTLS.Net\TestServer\obj\Debug\net471\TestServer.pdb

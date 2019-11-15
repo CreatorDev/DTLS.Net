@@ -1,0 +1,10 @@
+C:\Users\kmiller\source\repos\DTLS.Net\DTLS.Net\bin\Debug\net471\DTLS.Net.dll
+C:\Users\kmiller\source\repos\DTLS.Net\DTLS.Net\bin\Debug\net471\DTLS.Net.pdb
+C:\Users\kmiller\source\repos\DTLS.Net\DTLS.Net\bin\Debug\net471\BouncyCastle.Crypto.dll
+C:\Users\kmiller\source\repos\DTLS.Net\DTLS.Net\bin\Debug\net471\System.Security.Cryptography.Cng.dll
+C:\Users\kmiller\source\repos\DTLS.Net\DTLS.Net\obj\Debug\net471\DTLS.Net.csprojAssemblyReference.cache
+C:\Users\kmiller\source\repos\DTLS.Net\DTLS.Net\obj\Debug\net471\DTLS.Net.AssemblyInfoInputs.cache
+C:\Users\kmiller\source\repos\DTLS.Net\DTLS.Net\obj\Debug\net471\DTLS.Net.AssemblyInfo.cs
+C:\Users\kmiller\source\repos\DTLS.Net\DTLS.Net\obj\Debug\net471\DTLS.Net.csproj.CopyComplete
+C:\Users\kmiller\source\repos\DTLS.Net\DTLS.Net\obj\Debug\net471\DTLS.Net.dll
+C:\Users\kmiller\source\repos\DTLS.Net\DTLS.Net\obj\Debug\net471\DTLS.Net.pdb

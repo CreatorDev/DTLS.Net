@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net47;net471;net472;net48;netstandard2.1</TargetFrameworks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Folder Include="HandshakeMessages\KeyExchange\" />
+    <Folder Include="Records\" />
+    <Folder Include="PSK\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BouncyCastle.NetCore" Version="1.8.5" />
+    <PackageReference targetframework="netstandard2.1" Include="System.Security.Cryptography.Cng" Version="4.6.0" />
+  </ItemGroup>
+
+</Project>

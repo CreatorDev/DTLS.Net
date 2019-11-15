@@ -1,0 +1,12 @@
+C:\Users\kmiller\source\repos\DTLS.Net\TestServer\bin\Debug\netstandard2.0\TestServer.deps.json
+C:\Users\kmiller\source\repos\DTLS.Net\TestServer\bin\Debug\netstandard2.0\TestServer.dll
+C:\Users\kmiller\source\repos\DTLS.Net\TestServer\bin\Debug\netstandard2.0\TestServer.pdb
+C:\Users\kmiller\source\repos\DTLS.Net\TestServer\bin\Debug\netstandard2.0\DTLS.Net.dll
+C:\Users\kmiller\source\repos\DTLS.Net\TestServer\bin\Debug\netstandard2.0\DTLS.Net.pdb
+C:\Users\kmiller\source\repos\DTLS.Net\TestServer\obj\Debug\netstandard2.0\TestServer.csprojAssemblyReference.cache
+C:\Users\kmiller\source\repos\DTLS.Net\TestServer\obj\Debug\netstandard2.0\TestServer.AssemblyInfoInputs.cache
+C:\Users\kmiller\source\repos\DTLS.Net\TestServer\obj\Debug\netstandard2.0\TestServer.AssemblyInfo.cs
+C:\Users\kmiller\source\repos\DTLS.Net\TestServer\obj\Debug\netstandard2.0\TestServer.csproj.CopyComplete
+C:\Users\kmiller\source\repos\DTLS.Net\TestServer\obj\Debug\netstandard2.0\TestServer.dll
+C:\Users\kmiller\source\repos\DTLS.Net\TestServer\obj\Debug\netstandard2.0\TestServer.pdb
+C:\Users\kmiller\source\repos\DTLS.Net\TestServer\bin\Debug\netstandard2.0\BouncyCastle.Crypto.dll

@@ -1,0 +1,11 @@
+C:\Users\kmiller\source\repos\DTLS.Net\MyTestClient\bin\Debug\netstandard2.0\MyTestClient.deps.json
+C:\Users\kmiller\source\repos\DTLS.Net\MyTestClient\bin\Debug\netstandard2.0\MyTestClient.dll
+C:\Users\kmiller\source\repos\DTLS.Net\MyTestClient\bin\Debug\netstandard2.0\MyTestClient.pdb
+C:\Users\kmiller\source\repos\DTLS.Net\MyTestClient\bin\Debug\netstandard2.0\DTLS.Net.dll
+C:\Users\kmiller\source\repos\DTLS.Net\MyTestClient\bin\Debug\netstandard2.0\DTLS.Net.pdb
+C:\Users\kmiller\source\repos\DTLS.Net\MyTestClient\obj\Debug\netstandard2.0\MyTestClient.csprojAssemblyReference.cache
+C:\Users\kmiller\source\repos\DTLS.Net\MyTestClient\obj\Debug\netstandard2.0\MyTestClient.AssemblyInfoInputs.cache
+C:\Users\kmiller\source\repos\DTLS.Net\MyTestClient\obj\Debug\netstandard2.0\MyTestClient.AssemblyInfo.cs
+C:\Users\kmiller\source\repos\DTLS.Net\MyTestClient\obj\Debug\netstandard2.0\MyTestClient.csproj.CopyComplete
+C:\Users\kmiller\source\repos\DTLS.Net\MyTestClient\obj\Debug\netstandard2.0\MyTestClient.dll
+C:\Users\kmiller\source\repos\DTLS.Net\MyTestClient\obj\Debug\netstandard2.0\MyTestClient.pdb

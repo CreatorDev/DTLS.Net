@@ -1,0 +1,8 @@
+C:\Users\kmiller\source\repos\DTLS.Net\DTLS.Net\bin\Debug\netstandard2.1\DTLS.Net.deps.json
+C:\Users\kmiller\source\repos\DTLS.Net\DTLS.Net\bin\Debug\netstandard2.1\DTLS.Net.dll
+C:\Users\kmiller\source\repos\DTLS.Net\DTLS.Net\bin\Debug\netstandard2.1\DTLS.Net.pdb
+C:\Users\kmiller\source\repos\DTLS.Net\DTLS.Net\obj\Debug\netstandard2.1\DTLS.Net.csprojAssemblyReference.cache
+C:\Users\kmiller\source\repos\DTLS.Net\DTLS.Net\obj\Debug\netstandard2.1\DTLS.Net.AssemblyInfoInputs.cache
+C:\Users\kmiller\source\repos\DTLS.Net\DTLS.Net\obj\Debug\netstandard2.1\DTLS.Net.AssemblyInfo.cs
+C:\Users\kmiller\source\repos\DTLS.Net\DTLS.Net\obj\Debug\netstandard2.1\DTLS.Net.dll
+C:\Users\kmiller\source\repos\DTLS.Net\DTLS.Net\obj\Debug\netstandard2.1\DTLS.Net.pdb
