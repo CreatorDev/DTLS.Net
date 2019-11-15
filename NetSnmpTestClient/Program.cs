@@ -25,7 +25,7 @@ using System.Net;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 
-namespace TestClient
+namespace NetSnmpTestClient
 {
     public class Program
     {
