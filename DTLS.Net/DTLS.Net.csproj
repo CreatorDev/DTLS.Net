@@ -13,6 +13,10 @@
     <RepositoryType>GitHub</RepositoryType>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <Title>DTLS2.Net</Title>
+    <SignAssembly>true</SignAssembly>
+    <DelaySign>false</DelaySign>
+    <AssemblyOriginatorKeyFile>DTLS.Net.snk</AssemblyOriginatorKeyFile>
+    <AssemblyName>DTLS2.Net</AssemblyName>
   </PropertyGroup>
 
   <ItemGroup>
