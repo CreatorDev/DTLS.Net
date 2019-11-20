@@ -7,9 +7,9 @@ namespace DTLS
     public class CryptoApiRandomGenerator
     : IRandomGenerator
     {
-        private readonly RNGCryptoServiceProvider _RndProv;
+        private readonly RandomNumberGenerator _RndProv;
 
-        public CryptoApiRandomGenerator() => this._RndProv = new RNGCryptoServiceProvider();
+        public CryptoApiRandomGenerator() => this._RndProv = RandomNumberGenerator.Create();
 
         public virtual void AddSeedMaterial(byte[] seed)
         {

@@ -57,8 +57,10 @@ namespace DTLS
 		{
             var unixTime = DateTime.UtcNow.Subtract(TLSUtils.UnixEpoch);
             this.UnixTime = (uint)unixTime.TotalSeconds;
-			var random = new RNGCryptoServiceProvider();
-			random.GetBytes(this.RandomBytes);
+            using (var random = RandomNumberGenerator.Create())
+            {
+                random.GetBytes(this.RandomBytes);
+            }
 		}
 
 		public byte[] Serialise()

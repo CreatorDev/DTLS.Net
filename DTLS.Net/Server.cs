@@ -27,6 +27,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
+#if !NET452 && !NET47
+using System.Runtime.InteropServices;
+#endif
 using System.Threading;
 
 namespace DTLS
@@ -425,29 +428,31 @@ namespace DTLS
 
             var data = new byte[count];
             Buffer.BlockCopy(e.Buffer, 0, data, 0, count);
-            var stream = new MemoryStream(data);
-            while (stream.Position < stream.Length)
+            using (var stream = new MemoryStream(data))
             {
-                var record = DTLSRecord.Deserialise(stream);
-                record.RemoteEndPoint = e.RemoteEndPoint;
-                var address = record.RemoteEndPoint.Serialize();
-                var session = this._Sessions.GetSession(address);
-                if (session == null)
+                while (stream.Position < stream.Length)
                 {
-                    ThreadPool.QueueUserWorkItem(this.ProcessRecord, record);
+                    var record = DTLSRecord.Deserialise(stream);
+                    record.RemoteEndPoint = e.RemoteEndPoint;
+                    var address = record.RemoteEndPoint.Serialize();
+                    var session = this._Sessions.GetSession(address);
+                    if (session == null)
+                    {
+                        ThreadPool.QueueUserWorkItem(this.ProcessRecord, record);
+                    }
+                    else
+                    {
+                        this.CheckSession(session, record);
+                    }
                 }
-                else
-                {
-                    this.CheckSession(session, record);
-                }
-            }
 
-            if (sender is Socket socket)
-            {
-                var remoteEndPoint = socket.AddressFamily == AddressFamily.InterNetwork ? new IPEndPoint(IPAddress.Any, 0) : (EndPoint)new IPEndPoint(IPAddress.IPv6Any, 0);
-                e.RemoteEndPoint = remoteEndPoint;
-                e.SetBuffer(0, 4096);
-                socket.ReceiveFromAsync(e);
+                if (sender is Socket socket)
+                {
+                    var remoteEndPoint = socket.AddressFamily == AddressFamily.InterNetwork ? new IPEndPoint(IPAddress.Any, 0) : (EndPoint)new IPEndPoint(IPAddress.IPv6Any, 0);
+                    e.RemoteEndPoint = remoteEndPoint;
+                    e.SetBuffer(0, 4096);
+                    socket.ReceiveFromAsync(e);
+                }
             }
         }
                
@@ -458,7 +463,12 @@ namespace DTLS
             {
                 result.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, true);
             }
+
+#if NET452 || NET47
             if (Environment.OSVersion.Platform != PlatformID.Unix)
+#else
+            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+#endif
             {
                 // Do not throw SocketError.ConnectionReset by ignoring ICMP Port Unreachable
                 const int SIO_UDP_CONNRESET = -1744830452;

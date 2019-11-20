@@ -30,6 +30,9 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+#if !NET452 && !NET47
+using System.Runtime.InteropServices;
+#endif
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
@@ -43,7 +46,7 @@ namespace DTLS
 
         private const int MAXPACKETSIZE = 1440;
 
-        private static readonly Version _SupportedVersion = DTLSRecord.Version1_0;
+        private static readonly Version _SupportedVersion = DTLSRecord.Version1_2;
         private readonly ManualResetEvent _TriggerProcessRecords = new ManualResetEvent(false);
         private readonly ManualResetEvent _Connected = new ManualResetEvent(false);
         private readonly HandshakeInfo _HandshakeInfo = new HandshakeInfo();
@@ -57,7 +60,6 @@ namespace DTLS
         private ushort? _ServerEpoch;
         private long _ServerSequenceNumber;
         private ushort? _EncyptedServerEpoch;
-        private byte[] _ServerCertificate;
         private ushort _Epoch;
         private ushort _MessageSequence;
         private TlsCipher _Cipher;
@@ -76,11 +78,12 @@ namespace DTLS
         public PSKIdentities PSKIdentities { get; }
 
         public List<TCipherSuite> SupportedCipherSuites { get; }
+        public byte[] ServerCertificate { get; set; }
 
 #if NETSTANDARD2_1
         private CngKey _PrivateKeyRsa;
         public CngKey PublicKey { get; set; }
-#else
+#elif !NETSTANDARD1_3
         private RSACryptoServiceProvider _PrivateKeyRsa;
         public RSACryptoServiceProvider PublicKey { get; set; }
 #endif
@@ -203,7 +206,7 @@ namespace DTLS
                         {
                             var cert = Certificate.Deserialise(stream, TCertificateType.X509);
                             this._HandshakeInfo.UpdateHandshakeHash(data);
-                            this._ServerCertificate = cert.Cert;
+                            this.ServerCertificate = cert.Cert;
                             break;
                         }
                     case THandshakeType.ServerKeyExchange:
@@ -308,14 +311,16 @@ namespace DTLS
                                     var preMasterSecret = TLSUtils.GetPSKPreMasterSecret(otherSecret, this._PSKIdentity.Key);
                                     this._Cipher = TLSUtils.AssignCipher(preMasterSecret, true, this._Version, this._HandshakeInfo);
                                 }
+#if !NETSTANDARD1_3
                                 else if (keyExchangeAlgorithm == TKeyExchangeAlgorithm.RSA)
                                 {
                                     var clientKeyExchange = new RSAClientKeyExchange();
                                     this._ClientKeyExchange = clientKeyExchange;
                                     var PreMasterSecret = TLSUtils.GetRsaPreMasterSecret(_SupportedVersion);
-                                    clientKeyExchange.PremasterSecret = TLSUtils.GetEncryptedRsaPreMasterSecret(this._ServerCertificate, PreMasterSecret);
+                                    clientKeyExchange.PremasterSecret = TLSUtils.GetEncryptedRsaPreMasterSecret(this.ServerCertificate, PreMasterSecret);
                                     this._Cipher = TLSUtils.AssignCipher(PreMasterSecret, true, this._Version, this._HandshakeInfo);
                                 }
+#endif
                                 else
                                 {
                                     throw new NotImplementedException($"Key Exchange Algorithm {keyExchangeAlgorithm} Not Implemented");
@@ -340,7 +345,11 @@ namespace DTLS
                                 var certVerify = new CertificateVerify
                                 {
                                     SignatureHashAlgorithm = signatureHashAlgorithm,
+#if NETSTANDARD1_3
+                                    Signature = TLSUtils.Sign(this._PrivateKey,  true, this._Version, this._HandshakeInfo, signatureHashAlgorithm, this._HandshakeInfo.GetHash(this._Version))
+#else
                                     Signature = TLSUtils.Sign(this._PrivateKey, this._PrivateKeyRsa, true, this._Version, this._HandshakeInfo, signatureHashAlgorithm, this._HandshakeInfo.GetHash(this._Version))
+#endif
                                 };
 
                                 this.SendHandshakeMessage(certVerify, false);
@@ -530,21 +539,23 @@ namespace DTLS
             var count = e.BytesTransferred;
             var data = new byte[count];
             Buffer.BlockCopy(e.Buffer, 0, data, 0, count);
-            var stream = new MemoryStream(data);
-            while (stream.Position < stream.Length)
+            using (var stream = new MemoryStream(data))
             {
-                var record = DTLSRecord.Deserialise(stream);
-                record.RemoteEndPoint = e.RemoteEndPoint;
-                this._Records.Add(record);
-                this._TriggerProcessRecords.Set();
-            }
+                while (stream.Position < stream.Length)
+                {
+                    var record = DTLSRecord.Deserialise(stream);
+                    record.RemoteEndPoint = e.RemoteEndPoint;
+                    this._Records.Add(record);
+                    this._TriggerProcessRecords.Set();
+                }
 
-            if (sender is Socket socket)
-            {
-                var remoteEndPoint = socket.AddressFamily == AddressFamily.InterNetwork ? new IPEndPoint(IPAddress.Any, 0) : (EndPoint)new IPEndPoint(IPAddress.IPv6Any, 0);
-                e.RemoteEndPoint = remoteEndPoint;
-                e.SetBuffer(0, 4096);
-                socket.ReceiveFromAsync(e);
+                if (sender is Socket socket)
+                {
+                    var remoteEndPoint = socket.AddressFamily == AddressFamily.InterNetwork ? new IPEndPoint(IPAddress.Any, 0) : (EndPoint)new IPEndPoint(IPAddress.IPv6Any, 0);
+                    e.RemoteEndPoint = remoteEndPoint;
+                    e.SetBuffer(0, 4096);
+                    socket.ReceiveFromAsync(e);
+                }
             }
         }
 
@@ -555,8 +566,11 @@ namespace DTLS
             {
                 result.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, true);
             }
-
+#if NET452 || NET47
             if (Environment.OSVersion.Platform != PlatformID.Unix)
+#else
+            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+#endif
             {
                 // do not throw SocketError.ConnectionReset by ignoring ICMP Port Unreachable
                 const int SIO_UDP_CONNRESET = -1744830452;
@@ -909,6 +923,7 @@ namespace DTLS
             this.SendHello(null);
         }
 
+#if !NETSTANDARD1_3
         public void LoadX509Certificate(X509Chain chain)
         {
             if (chain == null)
@@ -932,8 +947,9 @@ namespace DTLS
                 CertificateType = TCertificateType.X509
             };
         }
+#endif
 
-        public void LoadCertificateFromPem(string filename)
+    public void LoadCertificateFromPem(string filename)
         {
             using (var stream = File.OpenRead(filename))
             {

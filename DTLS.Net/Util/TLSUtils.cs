@@ -36,9 +36,9 @@ namespace DTLS
 	{
         public static DateTime UnixEpoch = new DateTime(1970, 1, 1);
 
-		private static byte[] _MASTER_SECRET_LABEL = Encoding.ASCII.GetBytes("master secret");
+		private static readonly byte[] _MASTER_SECRET_LABEL = Encoding.ASCII.GetBytes("master secret");
         private const int MASTER_SECRET_LENGTH = 48;
-		private static TlsCipherFactory _CipherFactory = new DefaultTlsCipherFactory();   
+		private static readonly TlsCipherFactory _CipherFactory = new DefaultTlsCipherFactory();   
 
 		public static byte[] CalculateMasterSecret(byte[] preMasterSecret, IKeyExchange keyExchange)
 		{
@@ -80,19 +80,22 @@ namespace DTLS
             }
 
 			var result = new byte[length];
-			var hmac = new HMACSHA256(secret);
-			var iterations = (int)Math.Ceiling(length / (double)hmac.HashSize);
-			var dataToHash = seed;
-			var offset = 0;
-			for (var index = 0; index < iterations; index++)
-			{
-				dataToHash = hmac.ComputeHash(dataToHash);
-				hmac.TransformBlock(dataToHash, 0, dataToHash.Length, dataToHash, 0);
-				var hash = hmac.TransformFinalBlock(seed, 0, seed.Length);
-				Buffer.BlockCopy(hash, 0, result, offset, Math.Min(hash.Length, length - offset));
-				offset += hash.Length;
-			}
-			return result;
+            using (var hmac = new HMACSHA256(secret))
+            {
+                var iterations = (int)Math.Ceiling(length / (double)hmac.HashSize);
+                //var dataToHash = seed;
+                var offset = 0;
+                for (var index = 0; index < iterations; index++)
+                {
+                    //dataToHash = hmac.ComputeHash(dataToHash);
+                    //hmac.TransformBlock(dataToHash, 0, dataToHash.Length, dataToHash, 0);
+                    //var hash = hmac.TransformFinalBlock(seed, 0, seed.Length);
+                    var hash = hmac.ComputeHash(seed);
+                    Buffer.BlockCopy(hash, 0, result, offset, Math.Min(hash.Length, length - offset));
+                    offset += hash.Length;
+                }
+                return result;
+            }
 		}
 
 		private static int GetEncryptionAlgorithm(TCipherSuite cipherSuite)
@@ -228,40 +231,56 @@ namespace DTLS
         }
 
 #if NETSTANDARD2_1
-        public static byte[] Sign(AsymmetricKeyParameter privateKey, CngKey cngKey, bool client, Version version, HandshakeInfo handshakeInfo, 
+        public static byte[] Sign(AsymmetricKeyParameter privateKey, CngKey rsaKey, bool client, Version version, HandshakeInfo handshakeInfo,
             SignatureHashAlgorithm signatureHashAlgorithm, byte[] hash)
+#elif NETSTANDARD1_3
+        public static byte[] Sign(AsymmetricKeyParameter privateKey, bool client, Version version, HandshakeInfo handshakeInfo,
+            SignatureHashAlgorithm signatureHashAlgorithm, byte[] hash)
+#else
+        public static byte[] Sign(AsymmetricKeyParameter privateKey, RSACryptoServiceProvider rsaKey, bool client, Version version, HandshakeInfo handshakeInfo, 
+            SignatureHashAlgorithm signatureHashAlgorithm, byte[] hash)
+#endif
         {
-            if (privateKey == null && cngKey == null)
+
+#if NETSTANDARD1_3
+            if (privateKey == null)
+            {
+                throw new ArgumentException("No key provided");
+            }
+#else
+            if (privateKey == null && rsaKey == null)
             {
                 throw new ArgumentException("No key or Rsa CSP provided");
             }
 
             if (privateKey == null)
             {
+
                 if (signatureHashAlgorithm.Signature == TSignatureAlgorithm.RSA)
                 {
-                    return SignRsa(cngKey, hash);
+                    return SignRsa(rsaKey, hash);
                 }
 
                 throw new ArgumentException("Need private key for non-RSA Algorithms");
             }
+#endif
 
             if (version == null)
             {
                 throw new ArgumentNullException(nameof(version));
             }
 
-            if(handshakeInfo == null)
+            if (handshakeInfo == null)
             {
                 throw new ArgumentNullException(nameof(handshakeInfo));
             }
 
-            if(signatureHashAlgorithm == null)
+            if (signatureHashAlgorithm == null)
             {
                 throw new ArgumentNullException(nameof(signatureHashAlgorithm));
             }
 
-            if(hash == null)
+            if (hash == null)
             {
                 throw new ArgumentNullException(nameof(hash));
             }
@@ -301,6 +320,7 @@ namespace DTLS
             }
         }
 
+#if NETSTANDARD2_1
         public static byte[] SignRsa(CngKey cngKey, byte[] hash)
         {
             if(cngKey == null)
@@ -316,81 +336,7 @@ namespace DTLS
             var result = NCryptInterop.SignHashRaw(cngKey, hash, cngKey.KeySize);
             return result;
         }
-
-#else
-        public static byte[] Sign(AsymmetricKeyParameter privateKey, RSACryptoServiceProvider rsaCsp, bool client, Version version, HandshakeInfo handshakeInfo, 
-            SignatureHashAlgorithm signatureHashAlgorithm, byte[] hash)
-        {
-            if (privateKey == null && rsaCsp == null)
-            {
-                throw new ArgumentException("No key or Rsa CSP provided");
-            }
-
-            if (privateKey == null)
-            {
-                if (signatureHashAlgorithm.Signature == TSignatureAlgorithm.RSA)
-                {
-                    return SignRsa(rsaCsp, hash);
-                }
-
-                throw new ArgumentException("Need private key for non-RSA Algorithms");
-            }
-
-            if (version == null)
-            {
-                throw new ArgumentNullException(nameof(version));
-            }
-
-            if(handshakeInfo == null)
-            {
-                throw new ArgumentNullException(nameof(handshakeInfo));
-            }
-
-            if(signatureHashAlgorithm == null)
-            {
-                throw new ArgumentNullException(nameof(signatureHashAlgorithm));
-            }
-
-            if(hash == null)
-            {
-                throw new ArgumentNullException(nameof(hash));
-            }
-
-            TlsSigner signer = null;
-            switch (signatureHashAlgorithm.Signature)
-            {
-                case TSignatureAlgorithm.Anonymous:
-                    break;
-                case TSignatureAlgorithm.RSA:
-                    signer = new TlsRsaSigner();
-                    break;
-                case TSignatureAlgorithm.DSA:
-                    signer = new TlsDssSigner();
-                    break;
-                case TSignatureAlgorithm.ECDSA:
-
-                    signer = new TlsECDsaSigner();
-                    break;
-                default:
-                    break;
-            }
-
-            var context = new DTLSContext(client, version, handshakeInfo);
-            var randomGenerator = new CryptoApiRandomGenerator();
-            context.SecureRandom = new SecureRandom(randomGenerator);
-
-            signer.Init(context);
-            if (TlsUtilities.IsTlsV12(context))
-            {
-                var signatureAndHashAlgorithm = new SignatureAndHashAlgorithm((byte)signatureHashAlgorithm.Hash, (byte)signatureHashAlgorithm.Signature);
-                return signer.GenerateRawSignature(signatureAndHashAlgorithm, privateKey, hash);
-            }
-            else
-            {
-                return signer.GenerateRawSignature(privateKey, hash);
-            }
-        }
-
+#elif !NETSTANDARD1_3
         public static byte[] SignRsa(RSACryptoServiceProvider rsaCsp, byte[] hash)
         {
             if(rsaCsp == null)
@@ -485,15 +431,16 @@ namespace DTLS
                 throw new ArgumentNullException(nameof(version));
             }
 
-            using (var rngCsp = new RNGCryptoServiceProvider())
+            using (var random = RandomNumberGenerator.Create())
             {
                 var randomData = new byte[46];
-                rngCsp.GetBytes(randomData);
+                random.GetBytes(randomData);
                 var versionBytes = new byte[] { (byte)(255 - version.Major), (byte)(255 - version.Minor) };
                 return versionBytes.Concat(randomData).ToArray();
             }
         }
 
+#if !NETSTANDARD1_3
         internal static byte[] GetEncryptedRsaPreMasterSecret(byte[] cert, byte[] premaster)
         {
             if(cert == null)
@@ -511,11 +458,11 @@ namespace DTLS
             var rsa = (RSACng)certificate.PublicKey.Key;
             return rsa.Encrypt(premaster, RSAEncryptionPadding.Pkcs1);
 #else
-            var certificate = new X509Certificate2();
-            certificate.Import(cert);
+            var certificate = new X509Certificate2(cert);
             var rsa = (RSACryptoServiceProvider)certificate.PublicKey.Key;
             return rsa.Encrypt(premaster, false);
 #endif
         }
+#endif
     }
 }
