@@ -63,7 +63,7 @@ namespace DTLS
         private ushort _Epoch;
         private ushort _MessageSequence;
         private TlsCipher _Cipher;
-        private Version _Version;
+        private Version _Version = _SupportedVersion;
         private bool _SendCertificate;
         private IHandshakeMessage _ClientKeyExchange;
         private Certificate _Certificate;
@@ -192,7 +192,7 @@ namespace DTLS
                             this._ServerEpoch = record.Epoch;
                             this._HandshakeInfo.CipherSuite = (TCipherSuite)serverHello.CipherSuite;
                             this._HandshakeInfo.ServerRandom = serverHello.Random;
-                            this._Version = serverHello.ServerVersion < this._Version ? serverHello.ServerVersion : _SupportedVersion;
+                            this._Version = serverHello.ServerVersion <= this._Version ? serverHello.ServerVersion : _SupportedVersion;
                             break;
                         }
                     case THandshakeType.HelloVerifyRequest:
@@ -316,7 +316,7 @@ namespace DTLS
                                 {
                                     var clientKeyExchange = new RSAClientKeyExchange();
                                     this._ClientKeyExchange = clientKeyExchange;
-                                    var PreMasterSecret = TLSUtils.GetRsaPreMasterSecret(_SupportedVersion);
+                                    var PreMasterSecret = TLSUtils.GetRsaPreMasterSecret(this._Version);
                                     clientKeyExchange.PremasterSecret = TLSUtils.GetEncryptedRsaPreMasterSecret(this.ServerCertificate, PreMasterSecret);
                                     this._Cipher = TLSUtils.AssignCipher(PreMasterSecret, true, this._Version, this._HandshakeInfo);
                                 }
@@ -593,13 +593,9 @@ namespace DTLS
                 {
                     RecordType = TRecordType.ApplicationData,
                     Epoch = _Epoch,
-                    SequenceNumber = this.NextSequenceNumber()
+                    SequenceNumber = this.NextSequenceNumber(),
+                    Version = this._Version
                 };
-
-                if (this._Version != null)
-                {
-                    record.Version = this._Version;
-                }
 
                 var sequenceNumber = ((long)record.Epoch << 48) + record.SequenceNumber;
                 record.Fragment = this._Cipher.EncodePlaintext(sequenceNumber, (byte)TRecordType.ApplicationData, data, 0, data.Length);
@@ -631,13 +627,9 @@ namespace DTLS
             {
                 RecordType = TRecordType.Alert,
                 Epoch = _Epoch,
-                SequenceNumber = this.NextSequenceNumber()
+                SequenceNumber = this.NextSequenceNumber(),
+                Version = this._Version
             };
-
-            if (this._Version != null)
-            {
-                record.Version = this._Version;
-            }
 
             var sequenceNumber = ((long)record.Epoch << 48) + record.SequenceNumber;
 
@@ -682,15 +674,11 @@ namespace DTLS
                 RecordType = TRecordType.ChangeCipherSpec,
                 Epoch = _Epoch,
                 SequenceNumber = this.NextSequenceNumber(),
-                Fragment = new byte[size]
+                Fragment = new byte[size],
+                Version = this._Version
             };
 
             record.Fragment[0] = 1;
-            if (this._Version != null)
-            {
-                record.Version = this._Version;
-            }
-
             using (var stream = new MemoryStream(response))
             {
                 record.Serialise(stream);
@@ -710,12 +698,9 @@ namespace DTLS
                 var record = new DTLSRecord
                 {
                     RecordType = TRecordType.Handshake,
-                    Epoch = _Epoch
+                    Epoch = _Epoch,
+                    Version = this._Version
                 };
-                if (this._Version != null)
-                {
-                    record.Version = this._Version;
-                }
 
                 var handshakeRecord = new HandshakeRecord
                 {
@@ -788,12 +773,9 @@ namespace DTLS
                     RecordType = TRecordType.Handshake,
                     Epoch = _Epoch,
                     SequenceNumber = this.NextSequenceNumber(),
-                    Fragment = new byte[HandshakeRecord.RECORD_OVERHEAD + size]
+                    Fragment = new byte[HandshakeRecord.RECORD_OVERHEAD + size],
+                    Version = this._Version
                 };
-                if (this._Version != null)
-                {
-                    record.Version = this._Version;
-                }
 
                 var handshakeRecord = new HandshakeRecord
                 {
@@ -837,7 +819,7 @@ namespace DTLS
         {
             var clientHello = new ClientHello
             {
-                ClientVersion = _SupportedVersion,
+                ClientVersion = this._Version,
                 Random = this._HandshakeInfo.ClientRandom,
                 Cookie = cookie
             };
