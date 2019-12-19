@@ -17,7 +17,7 @@
     <DelaySign>false</DelaySign>
     <AssemblyOriginatorKeyFile>DTLS.Net.snk</AssemblyOriginatorKeyFile>
     <AssemblyName>DTLS2.Net</AssemblyName>
-    <Version>1.0.3</Version>
+    <Version>1.0.4</Version>
     <FileVersion>1.0.1.2</FileVersion>
     <AssemblyVersion>1.0.1.2</AssemblyVersion>
   </PropertyGroup>

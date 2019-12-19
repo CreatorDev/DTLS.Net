@@ -94,7 +94,7 @@ namespace DTLS
         public Client(EndPoint localEndPoint, List<TCipherSuite> supportedCipherSuites)
         {
             this.LocalEndPoint = localEndPoint ?? throw new ArgumentNullException(nameof(localEndPoint));
-            this.SupportedCipherSuites = supportedCipherSuites;
+            this.SupportedCipherSuites = supportedCipherSuites ?? throw new ArgumentNullException(nameof(supportedCipherSuites));
             this.PSKIdentities = new PSKIdentities();
             this._HandshakeInfo.ClientRandom = new RandomData();
             this._HandshakeInfo.ClientRandom.Generate();
@@ -414,6 +414,11 @@ namespace DTLS
 
         private void ProcessRecord(DTLSRecord record)
         {
+            if(record == null)
+            {
+                throw new ArgumentNullException(nameof(record));
+            }
+
             try
             {
                 Console.WriteLine(record.RecordType.ToString());
@@ -530,6 +535,16 @@ namespace DTLS
 
         private void ReceiveCallback(object sender, SocketAsyncEventArgs e)
         {
+            if(sender == null)
+            {
+                throw new ArgumentNullException(nameof(sender));
+            }
+
+            if(e == null)
+            {
+                throw new ArgumentNullException(nameof(sender));
+            }
+
             if (e.BytesTransferred == 0)
             {
                 //do nothing?
@@ -579,50 +594,57 @@ namespace DTLS
             return result;
         }
 
-
         public void Send(byte[] data)
         {
+            if(data == null)
+            {
+                throw new ArgumentNullException(nameof(data));
+            }
+
             if(this._Socket == null)
             {
-                throw new Exception("Socket cannot be null");
+                throw new Exception("Socket Cannot be Null");
             }
 
-            try
+            if(this._Cipher == null)
             {
-                var record = new DTLSRecord
-                {
-                    RecordType = TRecordType.ApplicationData,
-                    Epoch = _Epoch,
-                    SequenceNumber = this.NextSequenceNumber(),
-                    Version = this._Version
-                };
-
-                var sequenceNumber = ((long)record.Epoch << 48) + record.SequenceNumber;
-                record.Fragment = this._Cipher.EncodePlaintext(sequenceNumber, (byte)TRecordType.ApplicationData, data, 0, data.Length);
-
-                var responseSize = DTLSRecord.RECORD_OVERHEAD + record.Fragment.Length;
-                var response = new byte[responseSize];
-                using (var stream = new MemoryStream(response))
-                {
-                    record.Serialise(stream);
-                }
-
-                var parameters = new SocketAsyncEventArgs()
-                {
-                    RemoteEndPoint = _ServerEndPoint
-                };
-
-                parameters.SetBuffer(response, 0, responseSize);
-                this._Socket.SendToAsync(parameters);
+                throw new Exception("Cipher Cannot be Null");
             }
-            catch (Exception ex)
+
+            var record = new DTLSRecord
             {
-                Console.WriteLine(ex.ToString());
+                RecordType = TRecordType.ApplicationData,
+                Epoch = _Epoch,
+                SequenceNumber = this.NextSequenceNumber(),
+                Version = this._Version
+            };
+
+            var sequenceNumber = ((long)record.Epoch << 48) + record.SequenceNumber;
+            record.Fragment = this._Cipher.EncodePlaintext(sequenceNumber, (byte)TRecordType.ApplicationData, data, 0, data.Length);
+
+            var responseSize = DTLSRecord.RECORD_OVERHEAD + record.Fragment.Length;
+            var response = new byte[responseSize];
+            using (var stream = new MemoryStream(response))
+            {
+                record.Serialise(stream);
             }
+
+            var parameters = new SocketAsyncEventArgs()
+            {
+                RemoteEndPoint = _ServerEndPoint
+            };
+
+            parameters.SetBuffer(response, 0, responseSize);
+            this._Socket.SendToAsync(parameters);
         }
 
         private void SendAlert(TAlertLevel alertLevel, TAlertDescription alertDescription)
         {
+            if(this._Socket == null)
+            {
+                throw new Exception("Soket Cannot be Null");
+            }
+
             var record = new DTLSRecord
             {
                 RecordType = TRecordType.Alert,
@@ -653,6 +675,11 @@ namespace DTLS
 
         private void SendChangeCipherSpec()
         {
+            if(this._Socket == null)
+            {
+                throw new Exception("Socket Cannot be Null");
+            }
+
             var message = this.GetChangeCipherSpec();
             var parameters = new SocketAsyncEventArgs()
             {
@@ -688,6 +715,11 @@ namespace DTLS
 
         private byte[] GetBytes(IHandshakeMessage handshakeMessage, bool encrypt)
         {
+            if(handshakeMessage == null)
+            {
+                throw new ArgumentNullException(nameof(handshakeMessage));
+            }
+
             var size = handshakeMessage.CalculateSize(this._Version);
             var maxPayloadSize = MAXPACKETSIZE - DTLSRecord.RECORD_OVERHEAD + HandshakeRecord.RECORD_OVERHEAD;
 
@@ -863,6 +895,16 @@ namespace DTLS
 
         private void SendHandshakeMessage(IHandshakeMessage handshakeMessage, bool encrypt)
         {
+            if(handshakeMessage == null)
+            {
+                throw new ArgumentNullException(nameof(handshakeMessage));
+            }
+
+            if(this._Socket == null)
+            {
+                throw new Exception("Socket Cannot be Null");
+            }
+
             var bytes = this.GetBytes(handshakeMessage, encrypt);
             var parameters = new SocketAsyncEventArgs()
             {
@@ -874,13 +916,37 @@ namespace DTLS
 
         public void ConnectToServer(EndPoint serverEndPoint)
         {
+            if (serverEndPoint == null)
+            {
+                throw new ArgumentNullException(nameof(serverEndPoint));
+            }
+
+            var defaultTimeout = 1000;
+            this.ConnectToServer(serverEndPoint, defaultTimeout);
+        }
+
+        public void ConnectToServer(EndPoint serverEndPoint, int timeout)
+        {
+            if(serverEndPoint == null)
+            {
+                throw new ArgumentNullException(nameof(serverEndPoint));
+            }
+
+            if(timeout <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(timeout));
+            }
+
             this.ConnectToServerAsync(serverEndPoint);
-            this._Connected.WaitOne();
+            if (!this._Connected.WaitOne(timeout))
+            {
+                throw new OperationCanceledException("Could Not Connect To Server");
+            }
         }
 
         public void ConnectToServerAsync(EndPoint serverEndPoint)
         {
-            this._ServerEndPoint = serverEndPoint;
+            this._ServerEndPoint = serverEndPoint ?? throw new ArgumentNullException(nameof(serverEndPoint));
             if (this.SupportedCipherSuites.Count == 0)
             {
                 this.SupportedCipherSuites.Add(TCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8); //Test 1.2
@@ -931,8 +997,13 @@ namespace DTLS
         }
 #endif
 
-    public void LoadCertificateFromPem(string filename)
+        public void LoadCertificateFromPem(string filename)
         {
+            if (string.IsNullOrWhiteSpace(filename))
+            {
+                throw new ArgumentNullException(nameof(filename));
+            }
+
             using (var stream = File.OpenRead(filename))
             {
                 this.LoadCertificateFromPem(stream);
@@ -941,6 +1012,11 @@ namespace DTLS
 
         public void LoadCertificateFromPem(Stream stream)
         {
+            if(stream == null)
+            {
+                throw new ArgumentNullException(nameof(stream));
+            }
+
             var chain = new List<byte[]>();
             var reader = new PemReader(new StreamReader(stream));
             var pem = reader.ReadPemObject();
@@ -966,6 +1042,11 @@ namespace DTLS
 
         private void StartReceive(Socket socket)
         {
+            if(socket == null)
+            {
+                throw new ArgumentNullException(nameof(socket));
+            }
+
             var parameters = new SocketAsyncEventArgs
             {
                 RemoteEndPoint = socket.AddressFamily == AddressFamily.InterNetwork ? new IPEndPoint(IPAddress.Any, 0) : new IPEndPoint(IPAddress.IPv6Any, 0)
@@ -975,7 +1056,7 @@ namespace DTLS
             socket.ReceiveFromAsync(parameters);
         }
 
-        public void SetVersion(Version version) => this._Version = version;
+        public void SetVersion(Version version) => this._Version = version ?? throw new ArgumentNullException(nameof(version));
 
         public void Stop()
         {
