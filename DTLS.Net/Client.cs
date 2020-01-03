@@ -45,6 +45,7 @@ namespace DTLS
         public event DataReceivedEventHandler DataReceived;
 
         private const int MAXPACKETSIZE = 1440;
+        private const int SOCKETBUFFERSIZE = 18445;
 
         private static readonly Version _SupportedVersion = DTLSRecord.Version1_2;
         private readonly ManualResetEvent _TriggerProcessRecords = new ManualResetEvent(false);
@@ -568,7 +569,7 @@ namespace DTLS
                 {
                     var remoteEndPoint = socket.AddressFamily == AddressFamily.InterNetwork ? new IPEndPoint(IPAddress.Any, 0) : (EndPoint)new IPEndPoint(IPAddress.IPv6Any, 0);
                     e.RemoteEndPoint = remoteEndPoint;
-                    e.SetBuffer(0, 4096);
+                    e.SetBuffer(0, SOCKETBUFFERSIZE);
                     socket.ReceiveFromAsync(e);
                 }
             }
@@ -1052,7 +1053,7 @@ namespace DTLS
                 RemoteEndPoint = socket.AddressFamily == AddressFamily.InterNetwork ? new IPEndPoint(IPAddress.Any, 0) : new IPEndPoint(IPAddress.IPv6Any, 0)
             };
             parameters.Completed += new EventHandler<SocketAsyncEventArgs>(this.ReceiveCallback);
-            parameters.SetBuffer(new byte[4096], 0, 4096);
+            parameters.SetBuffer(new byte[SOCKETBUFFERSIZE], 0, SOCKETBUFFERSIZE);
             socket.ReceiveFromAsync(parameters);
         }
 
