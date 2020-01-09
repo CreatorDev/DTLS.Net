@@ -960,14 +960,15 @@ namespace DTLS
 
             this._Socket = this.SetupSocket(this.LocalEndPoint.AddressFamily);
             this._Socket.Bind(this.LocalEndPoint);
-            this._ProcessRecordsThread = new Thread(new ThreadStart(this.ProcessRecords));
-            if (this._ProcessRecordsThread.Name == null)
-            {
-                this._ProcessRecordsThread.Name = "ProcessRecordsThread";
-            }
+            //this._ProcessRecordsThread = new Thread(new ThreadStart(this.ProcessRecords));
+            //if (this._ProcessRecordsThread.Name == null)
+            //{
+            //    this._ProcessRecordsThread.Name = "ProcessRecordsThread";
+            //}
 
-            this._ProcessRecordsThread.IsBackground = true;
-            this._ProcessRecordsThread.Start();
+            //this._ProcessRecordsThread.IsBackground = true;
+            //this._ProcessRecordsThread.Start();
+            ThreadPool.QueueUserWorkItem(r => this.ProcessRecords());
             this.StartReceive(this._Socket);
             this.SendHello(null);
         }
