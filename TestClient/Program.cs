@@ -24,6 +24,7 @@ using DTLS;
 using System;
 using System.Net;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace TestClient
 {
@@ -41,7 +42,7 @@ namespace TestClient
             return result;
         }
 
-        public static void Main(string[] args)
+        public static async Task Main(string[] args)
         {
             var exit = false;
             Console.WriteLine("Press any key to Connect to Server");
@@ -64,10 +65,10 @@ namespace TestClient
                 if (Console.KeyAvailable)
                 {
                     var pressedKey = Console.ReadKey(true);
-                    client.Send(Encoding.UTF8.GetBytes(pressedKey.KeyChar.ToString()));
+                    await client.SendAsync(Encoding.UTF8.GetBytes(pressedKey.KeyChar.ToString()));
                 }
             }
-            client.Stop();
+            await client.StopAsync();
         }
     }
 }

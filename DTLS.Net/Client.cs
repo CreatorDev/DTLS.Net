@@ -36,6 +36,7 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace DTLS
 {
@@ -55,8 +56,8 @@ namespace DTLS
         private readonly List<byte[]> _FragmentedRecordList = new List<byte[]>();
 
         private Socket _Socket;
+        private byte[] _RecvDataBuffer = new byte[0];
         private bool _Terminate;
-        private Thread _ProcessRecordsThread;
         private EndPoint _ServerEndPoint;
         private ushort? _ServerEpoch;
         private long _ServerSequenceNumber;
@@ -109,7 +110,7 @@ namespace DTLS
 
         private long NextSequenceNumber() => ++this._SequenceNumber;
 
-        private void ProcessHandshake(DTLSRecord record)
+        private async Task ProcessHandshake(DTLSRecord record)
         {
             if(record == null)
             {
@@ -122,7 +123,7 @@ namespace DTLS
                 var count = 0;
                 while ((this._Cipher == null) && (count < 500))
                 {
-                    Thread.Sleep(10);
+                    await Task.Delay(10);
                     count++;
                 }
 
@@ -200,7 +201,7 @@ namespace DTLS
                         {
                             var helloVerifyRequest = HelloVerifyRequest.Deserialise(stream);
                             this._Version = helloVerifyRequest.ServerVersion;
-                            this.SendHello(helloVerifyRequest.Cookie);
+                            await this.SendHello(helloVerifyRequest.Cookie);
                             break;
                         }
                     case THandshakeType.Certificate:
@@ -330,10 +331,10 @@ namespace DTLS
 
                             if (this._SendCertificate)
                             {
-                                this.SendHandshakeMessage(this._Certificate, false);
+                                await this.SendHandshakeMessage(this._Certificate, false);
                             }
 
-                            this.SendHandshakeMessage(this._ClientKeyExchange, false);
+                            await this.SendHandshakeMessage(this._ClientKeyExchange, false);
 
                             if (this._SendCertificate)
                             {
@@ -353,17 +354,17 @@ namespace DTLS
 #endif
                                 };
 
-                                this.SendHandshakeMessage(certVerify, false);
+                                await this.SendHandshakeMessage(certVerify, false);
                             }
 
-                            this.SendChangeCipherSpec();
+                            await this.SendChangeCipherSpec();
                             var handshakeHash = this._HandshakeInfo.GetHash(this._Version);
                             var finished = new Finished
                             {
                                 VerifyData = TLSUtils.GetVerifyData(this._Version, this._HandshakeInfo, true, true, handshakeHash)
                             };
 
-                            this.SendHandshakeMessage(finished, true);
+                            await this.SendHandshakeMessage(finished, true);
 #if DEBUG
                             Console.Write("Handshake Hash:");
                             TLSUtils.WriteToConsole(handshakeHash);
@@ -413,7 +414,7 @@ namespace DTLS
             this._FragmentedRecordList.RemoveAll(x => true);
         }
 
-        private void ProcessRecord(DTLSRecord record)
+        private async Task ProcessRecord(DTLSRecord record)
         {
             if(record == null)
             {
@@ -466,7 +467,7 @@ namespace DTLS
                             {
                                 if (alertRecord.AlertDescription == TAlertDescription.CloseNotify)
                                 {
-                                    this.SendAlert(TAlertLevel.Warning, TAlertDescription.CloseNotify);
+                                    await this.SendAlert(TAlertLevel.Warning, TAlertDescription.CloseNotify);
                                     this._Connected.Set();
                                 }
                             }
@@ -474,7 +475,7 @@ namespace DTLS
                         }
                     case TRecordType.Handshake:
                         {
-                            this.ProcessHandshake(record);
+                            await this.ProcessHandshake(record);
                             this._ServerSequenceNumber = record.SequenceNumber + 1;
                             break;
                         }
@@ -499,7 +500,7 @@ namespace DTLS
             }
         }
 
-        private void ProcessRecords()
+        private async Task ProcessRecords()
         {
             while (!this._Terminate)
             {
@@ -512,7 +513,7 @@ namespace DTLS
                         if ((this._ServerSequenceNumber == record.SequenceNumber) && (this._ServerEpoch == record.Epoch))
                         {
                             this._Records.RemoveRecord();
-                            this.ProcessRecord(record);
+                            await this.ProcessRecord(record);
                             record = this._Records.PeekRecord();
                         }
                         else
@@ -523,7 +524,7 @@ namespace DTLS
                     else
                     {
                         this._Records.RemoveRecord();
-                        this.ProcessRecord(record);
+                        await this.ProcessRecord(record);
                         record = this._Records.PeekRecord();
                     }
                 }
@@ -534,49 +535,55 @@ namespace DTLS
             }
         }
 
-        private void ReceiveCallback(object sender, SocketAsyncEventArgs e)
+        private void ReceiveCallback(byte[] recvData, EndPoint ip)
         {
-            if(sender == null)
+            if(recvData == null)
             {
-                throw new ArgumentNullException(nameof(sender));
+                throw new ArgumentNullException(nameof(recvData));
             }
 
-            if(e == null)
+            if(ip == null)
             {
-                throw new ArgumentNullException(nameof(sender));
+                throw new ArgumentNullException(nameof(ip));
             }
 
-            if (e.BytesTransferred == 0)
+            if(!recvData.Any())
             {
-                //do nothing?
+                //nothing received? return?
                 return;
             }
 
-            var count = e.BytesTransferred;
-            var data = new byte[count];
-            Buffer.BlockCopy(e.Buffer, 0, data, 0, count);
-            using (var stream = new MemoryStream(data))
+            if(recvData.Length < 13)
+            {
+                this._RecvDataBuffer = this._RecvDataBuffer.Concat(recvData).ToArray();
+                return;
+            }
+
+            var length = BitConverter.ToUInt16(recvData.Skip(11).Take(2).Reverse().ToArray(), 0);
+            if (recvData.Length < length)
+            {
+                this._RecvDataBuffer = this._RecvDataBuffer.Concat(recvData).ToArray();
+                return;
+            }
+
+            var fullData = this._RecvDataBuffer.Concat(recvData).ToArray();
+            this._RecvDataBuffer = new byte[0];
+
+            using (var stream = new MemoryStream(fullData))
             {
                 while (stream.Position < stream.Length)
                 {
                     var record = DTLSRecord.Deserialise(stream);
-                    record.RemoteEndPoint = e.RemoteEndPoint;
+                    record.RemoteEndPoint = ip;
                     this._Records.Add(record);
                     this._TriggerProcessRecords.Set();
-                }
-
-                if (sender is Socket socket)
-                {
-                    var remoteEndPoint = socket.AddressFamily == AddressFamily.InterNetwork ? new IPEndPoint(IPAddress.Any, 0) : (EndPoint)new IPEndPoint(IPAddress.IPv6Any, 0);
-                    e.RemoteEndPoint = remoteEndPoint;
-                    e.SetBuffer(0, SOCKETBUFFERSIZE);
-                    socket.ReceiveFromAsync(e);
                 }
             }
         }
 
-        private Socket SetupSocket(AddressFamily addressFamily)
+        private async Task<Socket> SetupSocket()
         {
+            var addressFamily = this.LocalEndPoint.AddressFamily;
             var result = new Socket(addressFamily, SocketType.Dgram, ProtocolType.Udp);
             if (addressFamily == AddressFamily.InterNetworkV6)
             {
@@ -592,10 +599,18 @@ namespace DTLS
                 const int SIO_UDP_CONNRESET = -1744830452;
                 result.IOControl(SIO_UDP_CONNRESET, new byte[] { 0 }, null);
             }
+#if NETSTANDARD1_3
+            result.Bind(this.LocalEndPoint);
+            result.Connect(this._ServerEndPoint);
+#else
+            await result.ConnectAsync(this._ServerEndPoint);
+#endif
             return result;
         }
 
-        public void Send(byte[] data)
+        public void Send(byte[] data) => Task.Run(() => this.SendAsync(data)).Wait();
+
+        public async Task SendAsync(byte[] data)
         {
             if(data == null)
             {
@@ -623,23 +638,21 @@ namespace DTLS
             var sequenceNumber = ((long)record.Epoch << 48) + record.SequenceNumber;
             record.Fragment = this._Cipher.EncodePlaintext(sequenceNumber, (byte)TRecordType.ApplicationData, data, 0, data.Length);
 
-            var responseSize = DTLSRecord.RECORD_OVERHEAD + record.Fragment.Length;
-            var response = new byte[responseSize];
-            using (var stream = new MemoryStream(response))
+            var recordSize = DTLSRecord.RECORD_OVERHEAD + record.Fragment.Length;
+            var recordBytes = new byte[recordSize];
+            using (var stream = new MemoryStream(recordBytes))
             {
                 record.Serialise(stream);
             }
 
-            var parameters = new SocketAsyncEventArgs()
-            {
-                RemoteEndPoint = _ServerEndPoint
-            };
-
-            parameters.SetBuffer(response, 0, responseSize);
-            this._Socket.SendToAsync(parameters);
+#if NETSTANDARD1_3
+            this._Socket.SendAsAsync(recordBytes, this._ServerEndPoint);
+#else
+            await this._Socket.SendAsAsync(recordBytes);
+#endif
         }
 
-        private void SendAlert(TAlertLevel alertLevel, TAlertDescription alertDescription)
+        private async Task SendAlert(TAlertLevel alertLevel, TAlertDescription alertDescription)
         {
             if(this._Socket == null)
             {
@@ -660,36 +673,36 @@ namespace DTLS
             data[0] = (byte)alertLevel;
             data[1] = (byte)alertDescription;
             record.Fragment = this._Cipher == null ? data : this._Cipher.EncodePlaintext(sequenceNumber, (byte)TRecordType.ApplicationData, data, 0, data.Length);
-            var responseSize = DTLSRecord.RECORD_OVERHEAD + record.Fragment.Length;
-            var response = new byte[responseSize];
-            using (var stream = new MemoryStream(response))
+            var recordSize = DTLSRecord.RECORD_OVERHEAD + record.Fragment.Length;
+            var recordBytes = new byte[recordSize];
+            using (var stream = new MemoryStream(recordBytes))
             {
                 record.Serialise(stream);
             }
-            var parameters = new SocketAsyncEventArgs()
-            {
-                RemoteEndPoint = _ServerEndPoint
-            };
-            parameters.SetBuffer(response, 0, responseSize);
-            this._Socket.SendToAsync(parameters);
+
+#if NETSTANDARD1_3
+            this._Socket.SendAsAsync(recordBytes, this._ServerEndPoint);
+#else
+            await this._Socket.SendAsAsync(recordBytes);
+#endif
         }
 
-        private void SendChangeCipherSpec()
+        private async Task SendChangeCipherSpec()
         {
             if(this._Socket == null)
             {
                 throw new Exception("Socket Cannot be Null");
             }
 
-            var message = this.GetChangeCipherSpec();
-            var parameters = new SocketAsyncEventArgs()
-            {
-                RemoteEndPoint = _ServerEndPoint
-            };
+            var bytes = this.GetChangeCipherSpec();
 
-            parameters.SetBuffer(message, 0, message.Length);
-            this._Socket.SendToAsync(parameters);
+#if NETSTANDARD1_3
+            this._Socket.SendAsAsync(bytes, this._ServerEndPoint);
+#else
+            await this._Socket.SendAsAsync(bytes);
+#endif
             this.ChangeEpoch();
+
         }
 
         private byte[] GetChangeCipherSpec()
@@ -848,7 +861,7 @@ namespace DTLS
             }
         }
 
-        private void SendHello(byte[] cookie)
+        private async Task SendHello(byte[] cookie)
         {
             var clientHello = new ClientHello
             {
@@ -891,10 +904,10 @@ namespace DTLS
             var signatureAlgorithmsExtension = new SignatureAlgorithmsExtension();
             signatureAlgorithmsExtension.SupportedAlgorithms.Add(new SignatureHashAlgorithm() { Hash = THashAlgorithm.SHA1, Signature = TSignatureAlgorithm.RSA });
             clientHello.Extensions.Add(new Extension(signatureAlgorithmsExtension));
-            this.SendHandshakeMessage(clientHello, false);
+            await this.SendHandshakeMessage(clientHello, false);
         }
 
-        private void SendHandshakeMessage(IHandshakeMessage handshakeMessage, bool encrypt)
+        private async Task SendHandshakeMessage(IHandshakeMessage handshakeMessage, bool encrypt)
         {
             if(handshakeMessage == null)
             {
@@ -907,12 +920,11 @@ namespace DTLS
             }
 
             var bytes = this.GetBytes(handshakeMessage, encrypt);
-            var parameters = new SocketAsyncEventArgs()
-            {
-                RemoteEndPoint = _ServerEndPoint
-            };
-            parameters.SetBuffer(bytes, 0, bytes.Length);
-            this._Socket.SendToAsync(parameters);
+#if NETSTANDARD1_3
+            this._Socket.SendAsAsync(bytes, this._ServerEndPoint);
+#else
+            await this._Socket.SendAsAsync(bytes);
+#endif
         }
 
         public void ConnectToServer(EndPoint serverEndPoint)
@@ -938,14 +950,13 @@ namespace DTLS
                 throw new ArgumentOutOfRangeException(nameof(timeout));
             }
 
-            this.ConnectToServerAsync(serverEndPoint);
-            if (!this._Connected.WaitOne(timeout))
+            if (!Task.Run(() => this.ConnectToServerAsync(serverEndPoint)).Wait(timeout))
             {
                 throw new OperationCanceledException("Could Not Connect To Server");
             }
         }
 
-        public void ConnectToServerAsync(EndPoint serverEndPoint)
+        public async Task ConnectToServerAsync(EndPoint serverEndPoint)
         {
             this._ServerEndPoint = serverEndPoint ?? throw new ArgumentNullException(nameof(serverEndPoint));
             if (this.SupportedCipherSuites.Count == 0)
@@ -958,19 +969,11 @@ namespace DTLS
                 this.SupportedCipherSuites.Add(TCipherSuite.TLS_RSA_WITH_AES_256_CBC_SHA);
             }
 
-            this._Socket = this.SetupSocket(this.LocalEndPoint.AddressFamily);
-            this._Socket.Bind(this.LocalEndPoint);
-            //this._ProcessRecordsThread = new Thread(new ThreadStart(this.ProcessRecords));
-            //if (this._ProcessRecordsThread.Name == null)
-            //{
-            //    this._ProcessRecordsThread.Name = "ProcessRecordsThread";
-            //}
-
-            //this._ProcessRecordsThread.IsBackground = true;
-            //this._ProcessRecordsThread.Start();
-            ThreadPool.QueueUserWorkItem(r => this.ProcessRecords());
-            this.StartReceive(this._Socket);
-            this.SendHello(null);
+            this._Socket = await this.SetupSocket();
+            Task.Run(() => this.ProcessRecords());
+            Task.Run(() => this.StartReceive(this._Socket));
+            await this.SendHello(null);
+            this._Connected.WaitOne();
         }
 
 #if !NETSTANDARD1_3
@@ -1042,36 +1045,53 @@ namespace DTLS
             };
         }
 
-        private void StartReceive(Socket socket)
+        private async Task StartReceive(Socket socket)
         {
             if(socket == null)
             {
                 throw new ArgumentNullException(nameof(socket));
             }
 
-            var parameters = new SocketAsyncEventArgs
+            while (!this._Terminate)
             {
-                RemoteEndPoint = socket.AddressFamily == AddressFamily.InterNetwork ? new IPEndPoint(IPAddress.Any, 0) : new IPEndPoint(IPAddress.IPv6Any, 0)
-            };
-            parameters.Completed += new EventHandler<SocketAsyncEventArgs>(this.ReceiveCallback);
-            parameters.SetBuffer(new byte[SOCKETBUFFERSIZE], 0, SOCKETBUFFERSIZE);
-            socket.ReceiveFromAsync(parameters);
+                var available = socket.Available;
+                if (available > 0)
+                {
+                    var buffer = new byte[available];
+#if NETSTANDARD1_3
+                    var recvd = socket.ReceiveAsAsync(buffer);
+#else
+                    var recvd = await socket.ReceiveAsAsync(buffer);
+#endif
+                    if (recvd < available)
+                    {
+                        buffer = buffer.Take(recvd).ToArray();
+                    }
+
+                    this.ReceiveCallback(buffer, socket.RemoteEndPoint);
+                }
+                else
+                {
+                    await Task.Delay(100);
+                }
+            }
         }
 
         public void SetVersion(Version version) => this._Version = version ?? throw new ArgumentNullException(nameof(version));
 
-        public void Stop()
+        public void Stop() => Task.Run(() => this.StopAsync()).Wait();
+
+        public async Task StopAsync()
         {
             if (this._Socket != null)
             {
                 this._Terminate = true;
                 this._TriggerProcessRecords.Set();
-                this.SendAlert(TAlertLevel.Fatal, TAlertDescription.CloseNotify);
-                Thread.Sleep(100);
+                await this.SendAlert(TAlertLevel.Fatal, TAlertDescription.CloseNotify);
+                await Task.Delay(100);
                 this._Socket.Dispose();
                 this._Socket = null;
             }
         }
-
     }
 }
