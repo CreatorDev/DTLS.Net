@@ -233,7 +233,7 @@ namespace DTLS
 #if NETSTANDARD2_1
         public static byte[] Sign(AsymmetricKeyParameter privateKey, CngKey rsaKey, bool client, Version version, HandshakeInfo handshakeInfo,
             SignatureHashAlgorithm signatureHashAlgorithm, byte[] hash)
-#elif NETSTANDARD1_3
+#elif NETSTANDARD2_0
         public static byte[] Sign(AsymmetricKeyParameter privateKey, bool client, Version version, HandshakeInfo handshakeInfo,
             SignatureHashAlgorithm signatureHashAlgorithm, byte[] hash)
 #else
@@ -242,7 +242,7 @@ namespace DTLS
 #endif
         {
 
-#if NETSTANDARD1_3
+#if NETSTANDARD2_0
             if (privateKey == null)
             {
                 throw new ArgumentException("No key provided");
@@ -336,7 +336,7 @@ namespace DTLS
             var result = NCryptInterop.SignHashRaw(cngKey, hash, cngKey.KeySize);
             return result;
         }
-#elif !NETSTANDARD1_3
+#elif !NETSTANDARD2_0
         public static byte[] SignRsa(RSACryptoServiceProvider rsaCsp, byte[] hash)
         {
             if(rsaCsp == null)
@@ -440,7 +440,7 @@ namespace DTLS
             }
         }
 
-#if !NETSTANDARD1_3
+#if !NETSTANDARD2_0
         internal static byte[] GetEncryptedRsaPreMasterSecret(byte[] cert, byte[] premaster)
         {
             if(cert == null)

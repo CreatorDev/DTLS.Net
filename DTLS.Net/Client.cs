@@ -46,7 +46,6 @@ namespace DTLS
         public event DataReceivedEventHandler DataReceived;
 
         private const int MAXPACKETSIZE = 1440;
-        private const int SOCKETBUFFERSIZE = 18445;
 
         private static readonly Version _SupportedVersion = DTLSRecord.Version1_2;
         private readonly ManualResetEvent _TriggerProcessRecords = new ManualResetEvent(false);
@@ -85,7 +84,7 @@ namespace DTLS
 #if NETSTANDARD2_1
         private CngKey _PrivateKeyRsa;
         public CngKey PublicKey { get; set; }
-#elif !NETSTANDARD1_3
+#elif !NETSTANDARD2_0
         private RSACryptoServiceProvider _PrivateKeyRsa;
         public RSACryptoServiceProvider PublicKey { get; set; }
 #endif
@@ -313,7 +312,7 @@ namespace DTLS
                                     var preMasterSecret = TLSUtils.GetPSKPreMasterSecret(otherSecret, this._PSKIdentity.Key);
                                     this._Cipher = TLSUtils.AssignCipher(preMasterSecret, true, this._Version, this._HandshakeInfo);
                                 }
-#if !NETSTANDARD1_3
+#if !NETSTANDARD2_0
                                 else if (keyExchangeAlgorithm == TKeyExchangeAlgorithm.RSA)
                                 {
                                     var clientKeyExchange = new RSAClientKeyExchange();
@@ -347,7 +346,7 @@ namespace DTLS
                                 var certVerify = new CertificateVerify
                                 {
                                     SignatureHashAlgorithm = signatureHashAlgorithm,
-#if NETSTANDARD1_3
+#if NETSTANDARD2_0
                                     Signature = TLSUtils.Sign(this._PrivateKey,  true, this._Version, this._HandshakeInfo, signatureHashAlgorithm, this._HandshakeInfo.GetHash(this._Version))
 #else
                                     Signature = TLSUtils.Sign(this._PrivateKey, this._PrivateKeyRsa, true, this._Version, this._HandshakeInfo, signatureHashAlgorithm, this._HandshakeInfo.GetHash(this._Version))
@@ -599,7 +598,7 @@ namespace DTLS
                 const int SIO_UDP_CONNRESET = -1744830452;
                 result.IOControl(SIO_UDP_CONNRESET, new byte[] { 0 }, null);
             }
-#if NETSTANDARD1_3
+#if NETSTANDARD2_0
             result.Bind(this.LocalEndPoint);
             result.Connect(this._ServerEndPoint);
 #else
@@ -645,7 +644,7 @@ namespace DTLS
                 record.Serialise(stream);
             }
 
-#if NETSTANDARD1_3
+#if NETSTANDARD2_0
             this._Socket.SendAsAsync(recordBytes, this._ServerEndPoint);
 #else
             await this._Socket.SendAsAsync(recordBytes);
@@ -680,7 +679,7 @@ namespace DTLS
                 record.Serialise(stream);
             }
 
-#if NETSTANDARD1_3
+#if NETSTANDARD2_0
             this._Socket.SendAsAsync(recordBytes, this._ServerEndPoint);
 #else
             await this._Socket.SendAsAsync(recordBytes);
@@ -696,7 +695,7 @@ namespace DTLS
 
             var bytes = this.GetChangeCipherSpec();
 
-#if NETSTANDARD1_3
+#if NETSTANDARD2_0
             this._Socket.SendAsAsync(bytes, this._ServerEndPoint);
 #else
             await this._Socket.SendAsAsync(bytes);
@@ -920,7 +919,7 @@ namespace DTLS
             }
 
             var bytes = this.GetBytes(handshakeMessage, encrypt);
-#if NETSTANDARD1_3
+#if NETSTANDARD2_0
             this._Socket.SendAsAsync(bytes, this._ServerEndPoint);
 #else
             await this._Socket.SendAsAsync(bytes);
@@ -976,7 +975,7 @@ namespace DTLS
             this._Connected.WaitOne();
         }
 
-#if !NETSTANDARD1_3
+#if !NETSTANDARD2_0
         public void LoadX509Certificate(X509Chain chain)
         {
             if (chain == null)
@@ -1058,7 +1057,7 @@ namespace DTLS
                 if (available > 0)
                 {
                     var buffer = new byte[available];
-#if NETSTANDARD1_3
+#if NETSTANDARD2_0
                     var recvd = socket.ReceiveAsAsync(buffer);
 #else
                     var recvd = await socket.ReceiveAsAsync(buffer);

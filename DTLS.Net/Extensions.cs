@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Sockets;
-#if NETSTANDARD1_3
+#if NETSTANDARD2_0
 using System.Threading;
 using System.Net;
 #elif NET452 || NET47
@@ -16,7 +16,7 @@ namespace DTLS.Net
 {
     public static class Extensions
     {
-#if NETSTANDARD1_3
+#if NETSTANDARD2_0
         public static void SendAsAsync(this Socket socket, byte[] buffer, EndPoint endpoint)
         {
             var mre = new ManualResetEvent(false);
