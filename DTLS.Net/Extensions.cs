@@ -4,10 +4,7 @@ using System.Linq;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
-#if NETSTANDARD2_0
-using System.Threading;
-using System.Net;
-#elif NET452 || NET47
+#if NET452 || NET47
 using System.Net;
 #endif
 
@@ -15,43 +12,11 @@ namespace DTLS.Net
 {
     public static class Extensions
     {
-#if NETSTANDARD2_0
-        public static void SendAsAsync(this Socket socket, byte[] buffer, EndPoint endpoint)
-        {
-            var mre = new ManualResetEvent(false);
-            var parameters = new SocketAsyncEventArgs()
-            {
-                RemoteEndPoint = endpoint
-            };
-
-            parameters.SetBuffer(buffer, 0, buffer.Length);
-            parameters.Completed += new EventHandler<SocketAsyncEventArgs>((object _, SocketAsyncEventArgs __) => mre.Set());
-            socket.SendToAsync(parameters); 
-            mre.WaitOne();
-            parameters.Dispose();
-        }
-
-        public static int ReceiveAsAsync(this Socket socket, byte[] buffer)
-        {
-            var mre = new ManualResetEvent(false); 
-            var parameters = new SocketAsyncEventArgs()
-            {
-                RemoteEndPoint = socket.AddressFamily == AddressFamily.InterNetwork ? new IPEndPoint(IPAddress.Any, 0) : new IPEndPoint(IPAddress.IPv6Any, 0)
-            };
-
-            parameters.SetBuffer(buffer, 0, buffer.Length);
-            parameters.Completed += new EventHandler<SocketAsyncEventArgs>((object _, SocketAsyncEventArgs __) => mre.Set());
-            socket.ReceiveFromAsync(parameters);
-            mre.WaitOne();
-            var recvd = parameters.BytesTransferred;
-            parameters.Dispose();
-            return recvd;
-        }
-#else
 #if NET452 || NET47
         public static Task ConnectAsync(this Socket socket, EndPoint endpoint) =>
             Task.Factory.FromAsync(socket.BeginConnect, socket.EndConnect, endpoint, null);
 #endif
+
         public static Task<int> SendAsAsync(this Socket socket, byte[] buffer) =>
             Task.Factory.FromAsync(
                 socket.BeginSend(buffer, 0, buffer.Length, SocketFlags.None, null, socket),
@@ -63,7 +28,6 @@ namespace DTLS.Net
                 socket.BeginReceive(buffer, 0, buffer.Length, SocketFlags.None, null, socket),
                 socket.EndReceive
                 );
-#endif
 
         public static async Task<TResult> TimeoutAfter<TResult>(this Task<TResult> task, int timeout, string message)
         {

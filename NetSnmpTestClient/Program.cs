@@ -22,8 +22,8 @@ namespace NetSnmpTestClient
             client.LoadX509Certificate(chain);
             client.SupportedCipherSuites.Add(TCipherSuite.TLS_RSA_WITH_AES_256_CBC_SHA);
             //client.ConnectToServer(new IPEndPoint(IPAddress.Parse("2620:131:101e:441:9a1d:faff:feb1:3521"), 10161), 2000);
-            await client.ConnectToServerWithTimeoutAsync(new IPEndPoint(IPAddress.Parse("10.247.160.3"), 10161), 1000);
-            await client.SendAsync(Encoding.UTF8.GetBytes("TEST"));
+            await client.ConnectToServerWithTimeoutAsync(new IPEndPoint(IPAddress.Parse("10.247.160.3"), 10161), 5000);
+            await client.SendWithTimeoutAsync(Encoding.UTF8.GetBytes("TEST"), 5000);
             store.Close();
         }
     }

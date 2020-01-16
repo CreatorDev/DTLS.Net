@@ -81,10 +81,10 @@ namespace DTLS
         public List<TCipherSuite> SupportedCipherSuites { get; }
         public byte[] ServerCertificate { get; set; }
 
-#if NETSTANDARD2_1
+#if NETSTANDARD2_1 || NETSTANDARD2_0
         private CngKey _PrivateKeyRsa;
         public CngKey PublicKey { get; set; }
-#elif !NETSTANDARD2_0
+#else
         private RSACryptoServiceProvider _PrivateKeyRsa;
         public RSACryptoServiceProvider PublicKey { get; set; }
 #endif
@@ -200,7 +200,7 @@ namespace DTLS
                         {
                             var helloVerifyRequest = HelloVerifyRequest.Deserialise(stream);
                             this._Version = helloVerifyRequest.ServerVersion;
-                            await this.SendHello(helloVerifyRequest.Cookie);
+                            await this.SendHelloAsync(helloVerifyRequest.Cookie);
                             break;
                         }
                     case THandshakeType.Certificate:
@@ -312,7 +312,6 @@ namespace DTLS
                                     var preMasterSecret = TLSUtils.GetPSKPreMasterSecret(otherSecret, this._PSKIdentity.Key);
                                     this._Cipher = TLSUtils.AssignCipher(preMasterSecret, true, this._Version, this._HandshakeInfo);
                                 }
-#if !NETSTANDARD2_0
                                 else if (keyExchangeAlgorithm == TKeyExchangeAlgorithm.RSA)
                                 {
                                     var clientKeyExchange = new RSAClientKeyExchange();
@@ -321,7 +320,6 @@ namespace DTLS
                                     clientKeyExchange.PremasterSecret = TLSUtils.GetEncryptedRsaPreMasterSecret(this.ServerCertificate, PreMasterSecret);
                                     this._Cipher = TLSUtils.AssignCipher(PreMasterSecret, true, this._Version, this._HandshakeInfo);
                                 }
-#endif
                                 else
                                 {
                                     throw new NotImplementedException($"Key Exchange Algorithm {keyExchangeAlgorithm} Not Implemented");
@@ -330,10 +328,10 @@ namespace DTLS
 
                             if (this._SendCertificate)
                             {
-                                await this.SendHandshakeMessage(this._Certificate, false);
+                                await this.SendHandshakeMessageWithTimeoutAsync(this._Certificate, false);
                             }
 
-                            await this.SendHandshakeMessage(this._ClientKeyExchange, false);
+                            await this.SendHandshakeMessageWithTimeoutAsync(this._ClientKeyExchange, false);
 
                             if (this._SendCertificate)
                             {
@@ -346,24 +344,20 @@ namespace DTLS
                                 var certVerify = new CertificateVerify
                                 {
                                     SignatureHashAlgorithm = signatureHashAlgorithm,
-#if NETSTANDARD2_0
-                                    Signature = TLSUtils.Sign(this._PrivateKey,  true, this._Version, this._HandshakeInfo, signatureHashAlgorithm, this._HandshakeInfo.GetHash(this._Version))
-#else
                                     Signature = TLSUtils.Sign(this._PrivateKey, this._PrivateKeyRsa, true, this._Version, this._HandshakeInfo, signatureHashAlgorithm, this._HandshakeInfo.GetHash(this._Version))
-#endif
                                 };
 
-                                await this.SendHandshakeMessage(certVerify, false);
+                                await this.SendHandshakeMessageWithTimeoutAsync(certVerify, false);
                             }
 
-                            await this.SendChangeCipherSpec();
+                            await this.SendChangeCipherSpecWithTimeoutAsync();
                             var handshakeHash = this._HandshakeInfo.GetHash(this._Version);
                             var finished = new Finished
                             {
                                 VerifyData = TLSUtils.GetVerifyData(this._Version, this._HandshakeInfo, true, true, handshakeHash)
                             };
 
-                            await this.SendHandshakeMessage(finished, true);
+                            await this.SendHandshakeMessageWithTimeoutAsync(finished, true);
 #if DEBUG
                             Console.Write("Handshake Hash:");
                             TLSUtils.WriteToConsole(handshakeHash);
@@ -466,7 +460,7 @@ namespace DTLS
                             {
                                 if (alertRecord.AlertDescription == TAlertDescription.CloseNotify)
                                 {
-                                    await this.SendAlert(TAlertLevel.Warning, TAlertDescription.CloseNotify);
+                                    await this.SendAlertWithTimeoutAsync(TAlertLevel.Warning, TAlertDescription.CloseNotify);
                                     this._ConnectionComplete = true;
                                 }
                             }
@@ -601,14 +595,12 @@ namespace DTLS
                 const int SIO_UDP_CONNRESET = -1744830452;
                 result.IOControl(SIO_UDP_CONNRESET, new byte[] { 0 }, null);
             }
-#if NETSTANDARD2_0
-            result.Bind(this.LocalEndPoint);
-            result.Connect(this._ServerEndPoint);
-#else
+
             await result.ConnectAsync(this._ServerEndPoint);
-#endif
             return result;
         }
+
+        public async Task SendWithTimeoutAsync(byte[] data, int timeout) => await this.SendAsync(data).TimeoutAfter(timeout, "Failure to send data");
 
         public async Task SendAsync(byte[] data)
         {
@@ -645,14 +637,16 @@ namespace DTLS
                 record.Serialise(stream);
             }
 
-#if NETSTANDARD2_0
-            this._Socket.SendAsAsync(recordBytes, this._ServerEndPoint);
-#else
             await this._Socket.SendAsAsync(recordBytes);
-#endif
         }
 
-        private async Task SendAlert(TAlertLevel alertLevel, TAlertDescription alertDescription)
+        private async Task SendAlertWithTimeoutAsync(TAlertLevel alertLevel, TAlertDescription alertDescription) =>
+           await this.SendAlertWithTimeoutAsync(alertLevel, alertDescription, 1000);
+
+        private async Task SendAlertWithTimeoutAsync(TAlertLevel alertLevel, TAlertDescription alertDescription, int timeout) => 
+            await this.SendAlertAsync(alertLevel, alertDescription).TimeoutAfter(timeout, "Could Not Send Alert Message");
+
+        private async Task SendAlertAsync(TAlertLevel alertLevel, TAlertDescription alertDescription)
         {
             if(this._Socket == null)
             {
@@ -680,14 +674,16 @@ namespace DTLS
                 record.Serialise(stream);
             }
 
-#if NETSTANDARD2_0
-            this._Socket.SendAsAsync(recordBytes, this._ServerEndPoint);
-#else
             await this._Socket.SendAsAsync(recordBytes);
-#endif
         }
 
-        private async Task SendChangeCipherSpec()
+        private async Task SendChangeCipherSpecWithTimeoutAsync() =>
+            await this.SendChangeCipherSpecWithTimeoutAsync(1000);
+
+        private async Task SendChangeCipherSpecWithTimeoutAsync(int timeout) => 
+            await this.SendChangeCipherSpecAsync().TimeoutAfter(timeout, "Could Not Send Change Cipher Spec");
+
+        private async Task SendChangeCipherSpecAsync()
         {
             if(this._Socket == null)
             {
@@ -695,14 +691,8 @@ namespace DTLS
             }
 
             var bytes = this.GetChangeCipherSpec();
-
-#if NETSTANDARD2_0
-            this._Socket.SendAsAsync(bytes, this._ServerEndPoint);
-#else
             await this._Socket.SendAsAsync(bytes);
-#endif
             this.ChangeEpoch();
-
         }
 
         private byte[] GetChangeCipherSpec()
@@ -861,7 +851,7 @@ namespace DTLS
             }
         }
 
-        private async Task SendHello(byte[] cookie)
+        private async Task SendHelloAsync(byte[] cookie)
         {
             var clientHello = new ClientHello
             {
@@ -904,10 +894,16 @@ namespace DTLS
             var signatureAlgorithmsExtension = new SignatureAlgorithmsExtension();
             signatureAlgorithmsExtension.SupportedAlgorithms.Add(new SignatureHashAlgorithm() { Hash = THashAlgorithm.SHA1, Signature = TSignatureAlgorithm.RSA });
             clientHello.Extensions.Add(new Extension(signatureAlgorithmsExtension));
-            await this.SendHandshakeMessage(clientHello, false);
+            await this.SendHandshakeMessageWithTimeoutAsync(clientHello, false);
         }
 
-        private async Task SendHandshakeMessage(IHandshakeMessage handshakeMessage, bool encrypt)
+        private async Task SendHandshakeMessageWithTimeoutAsync(IHandshakeMessage handshakeMessage, bool encrypt) =>
+            await this.SendHandshakeMessageWithTimeoutAsync(handshakeMessage, encrypt, 1000);
+
+        private async Task SendHandshakeMessageWithTimeoutAsync(IHandshakeMessage handshakeMessage, bool encrypt, int timeout) =>
+            await this.SendHandshakeMessageAsync(handshakeMessage, encrypt).TimeoutAfter(timeout, "Could not send handshake message");
+
+        private async Task SendHandshakeMessageAsync(IHandshakeMessage handshakeMessage, bool encrypt)
         {
             if(handshakeMessage == null)
             {
@@ -920,11 +916,7 @@ namespace DTLS
             }
 
             var bytes = this.GetBytes(handshakeMessage, encrypt);
-#if NETSTANDARD2_0
-            this._Socket.SendAsAsync(bytes, this._ServerEndPoint);
-#else
             await this._Socket.SendAsAsync(bytes);
-#endif
         }
 
         public async Task ConnectToServerWithTimeoutAsync(EndPoint serverEndPoint)
@@ -967,9 +959,11 @@ namespace DTLS
             }
 
             this._Socket = await this.SetupSocket();
-            Task.Run(() => this.ProcessRecords());
-            Task.Run(() => this.StartReceive(this._Socket));
-            await this.SendHello(null);
+#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+            Task.Run(() => this.ProcessRecords()); //fire and forget
+            Task.Run(() => this.StartReceive(this._Socket)); // fire and forget
+#pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+            await this.SendHelloAsync(null);
 
             while (!this._ConnectionComplete)
             {
@@ -977,7 +971,6 @@ namespace DTLS
             }
         }
 
-#if !NETSTANDARD2_0
         public void LoadX509Certificate(X509Chain chain)
         {
             if (chain == null)
@@ -987,7 +980,7 @@ namespace DTLS
 
             var mainCert = chain.ChainElements[0].Certificate;
 
-#if NETSTANDARD2_1
+#if NETSTANDARD2_1 || NETSTANDARD2_0
             this._PrivateKeyRsa = ((RSACng)mainCert.PrivateKey).Key;
             this.PublicKey = ((RSACng)mainCert.PublicKey.Key).Key;
 #else
@@ -1001,7 +994,6 @@ namespace DTLS
                 CertificateType = TCertificateType.X509
             };
         }
-#endif
 
         public void LoadCertificateFromPem(string filename)
         {
@@ -1059,11 +1051,7 @@ namespace DTLS
                 if (available > 0)
                 {
                     var buffer = new byte[available];
-#if NETSTANDARD2_0
-                    var recvd = socket.ReceiveAsAsync(buffer);
-#else
                     var recvd = await socket.ReceiveAsAsync(buffer);
-#endif
                     if (recvd < available)
                     {
                         buffer = buffer.Take(recvd).ToArray();
@@ -1086,7 +1074,7 @@ namespace DTLS
             {
                 this._Terminate = true;
                 this._ShouldTriggerRecordProccess = true;
-                await this.SendAlert(TAlertLevel.Fatal, TAlertDescription.CloseNotify);
+                await this.SendAlertWithTimeoutAsync(TAlertLevel.Fatal, TAlertDescription.CloseNotify);
                 await Task.Delay(100);
                 this._Socket.Dispose();
                 this._Socket = null;

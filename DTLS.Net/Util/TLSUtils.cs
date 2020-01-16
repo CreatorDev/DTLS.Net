@@ -230,24 +230,14 @@ namespace DTLS
                 : TlsUtilities.PRF(context, master_secret, ExporterLabel.key_expansion, seed, size);
         }
 
-#if NETSTANDARD2_1
+#if NETSTANDARD2_1 || NETSTANDARD2_0
         public static byte[] Sign(AsymmetricKeyParameter privateKey, CngKey rsaKey, bool client, Version version, HandshakeInfo handshakeInfo,
-            SignatureHashAlgorithm signatureHashAlgorithm, byte[] hash)
-#elif NETSTANDARD2_0
-        public static byte[] Sign(AsymmetricKeyParameter privateKey, bool client, Version version, HandshakeInfo handshakeInfo,
             SignatureHashAlgorithm signatureHashAlgorithm, byte[] hash)
 #else
         public static byte[] Sign(AsymmetricKeyParameter privateKey, RSACryptoServiceProvider rsaKey, bool client, Version version, HandshakeInfo handshakeInfo, 
             SignatureHashAlgorithm signatureHashAlgorithm, byte[] hash)
 #endif
         {
-
-#if NETSTANDARD2_0
-            if (privateKey == null)
-            {
-                throw new ArgumentException("No key provided");
-            }
-#else
             if (privateKey == null && rsaKey == null)
             {
                 throw new ArgumentException("No key or Rsa CSP provided");
@@ -263,7 +253,6 @@ namespace DTLS
 
                 throw new ArgumentException("Need private key for non-RSA Algorithms");
             }
-#endif
 
             if (version == null)
             {
@@ -320,7 +309,7 @@ namespace DTLS
             }
         }
 
-#if NETSTANDARD2_1
+#if NETSTANDARD2_1 || NETSTANDARD2_0
         public static byte[] SignRsa(CngKey cngKey, byte[] hash)
         {
             if(cngKey == null)
@@ -336,7 +325,7 @@ namespace DTLS
             var result = NCryptInterop.SignHashRaw(cngKey, hash, cngKey.KeySize);
             return result;
         }
-#elif !NETSTANDARD2_0
+#else
         public static byte[] SignRsa(RSACryptoServiceProvider rsaCsp, byte[] hash)
         {
             if(rsaCsp == null)
@@ -440,7 +429,6 @@ namespace DTLS
             }
         }
 
-#if !NETSTANDARD2_0
         internal static byte[] GetEncryptedRsaPreMasterSecret(byte[] cert, byte[] premaster)
         {
             if(cert == null)
@@ -453,7 +441,7 @@ namespace DTLS
                 throw new ArgumentNullException(nameof(premaster));
             }
 
-#if NETSTANDARD2_1
+#if NETSTANDARD2_1 || NETSTANDARD2_0
             var certificate = new X509Certificate2(cert);
             var rsa = (RSACng)certificate.PublicKey.Key;
             return rsa.Encrypt(premaster, RSAEncryptionPadding.Pkcs1);
@@ -463,6 +451,5 @@ namespace DTLS
             return rsa.Encrypt(premaster, false);
 #endif
         }
-#endif
     }
 }
