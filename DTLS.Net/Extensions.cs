@@ -2,14 +2,13 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Sockets;
+using System.Threading;
+using System.Threading.Tasks;
 #if NETSTANDARD2_0
 using System.Threading;
 using System.Net;
 #elif NET452 || NET47
 using System.Net;
-using System.Threading.Tasks;
-#else
-using System.Threading.Tasks;
 #endif
 
 namespace DTLS.Net
@@ -65,6 +64,36 @@ namespace DTLS.Net
                 socket.EndReceive
                 );
 #endif
+
+        public static async Task<TResult> TimeoutAfter<TResult>(this Task<TResult> task, int timeout, string message)
+        {
+            using (var timeoutCancellationTokenSource = new CancellationTokenSource())
+            {
+                var completedTask = await Task.WhenAny(task, Task.Delay(timeout, timeoutCancellationTokenSource.Token));
+                timeoutCancellationTokenSource.Cancel();
+                if (completedTask == task)
+                {
+                    return await task;  // Very important in order to propagate exceptions
+                }
+                
+                throw new OperationCanceledException(message);
+            }
+        }
+
+        public static async Task TimeoutAfter(this Task task, int timeout, string message)
+        {
+            using (var timeoutCancellationTokenSource = new CancellationTokenSource())
+            {
+                var completedTask = await Task.WhenAny(task, Task.Delay(timeout, timeoutCancellationTokenSource.Token));
+                timeoutCancellationTokenSource.Cancel();
+                if (completedTask == task)
+                {
+                    await task;  // Very important in order to propagate exceptions
+                }
+
+                throw new OperationCanceledException(message);
+            }
+        }
 
         public static IEnumerable<IEnumerable<T>> ChunkBySize<T>(this IEnumerable<T> source, int size)
         {

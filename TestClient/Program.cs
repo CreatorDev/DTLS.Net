@@ -51,7 +51,7 @@ namespace TestClient
             client.PSKIdentities.AddIdentity(Encoding.UTF8.GetBytes("oFIrQFrW8EWcZ5u7eGfrkw"), HexToBytes("7CCDE14A5CF3B71C0C08C8B7F9E5"));
             client.LoadCertificateFromPem(@"Client.pem");
             client.SupportedCipherSuites.Add(TCipherSuite.TLS_PSK_WITH_AES_128_CCM_8);
-            client.ConnectToServer(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 5684));
+            client.ConnectToServerWithTimeoutAsync(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 5684));
             Console.CancelKeyPress += delegate (object sender, ConsoleCancelEventArgs e)
             {
                 e.Cancel = true;

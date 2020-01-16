@@ -607,8 +607,6 @@ namespace DTLS
             return result;
         }
 
-        public void Send(byte[] data) => Task.Run(() => this.SendAsync(data)).Wait();
-
         public async Task SendAsync(byte[] data)
         {
             if(data == null)
@@ -926,7 +924,7 @@ namespace DTLS
 #endif
         }
 
-        public void ConnectToServer(EndPoint serverEndPoint)
+        public async Task ConnectToServerWithTimeoutAsync(EndPoint serverEndPoint)
         {
             if (serverEndPoint == null)
             {
@@ -934,10 +932,10 @@ namespace DTLS
             }
 
             var defaultTimeout = 1000;
-            this.ConnectToServer(serverEndPoint, defaultTimeout);
+            await this.ConnectToServerWithTimeoutAsync(serverEndPoint, defaultTimeout);
         }
 
-        public void ConnectToServer(EndPoint serverEndPoint, int timeout)
+        public async Task ConnectToServerWithTimeoutAsync(EndPoint serverEndPoint, int timeout)
         {
             if(serverEndPoint == null)
             {
@@ -949,10 +947,7 @@ namespace DTLS
                 throw new ArgumentOutOfRangeException(nameof(timeout));
             }
 
-            if (!Task.Run(() => this.ConnectToServerAsync(serverEndPoint)).Wait(timeout))
-            {
-                throw new OperationCanceledException("Could Not Connect To Server");
-            }
+            await this.ConnectToServerAsync(serverEndPoint).TimeoutAfter(timeout, "Could Not Connect To Server");
         }
 
         public async Task ConnectToServerAsync(EndPoint serverEndPoint)
@@ -1077,8 +1072,6 @@ namespace DTLS
         }
 
         public void SetVersion(Version version) => this._Version = version ?? throw new ArgumentNullException(nameof(version));
-
-        public void Stop() => Task.Run(() => this.StopAsync()).Wait();
 
         public async Task StopAsync()
         {
