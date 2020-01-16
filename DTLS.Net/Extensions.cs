@@ -89,6 +89,7 @@ namespace DTLS.Net
                 if (completedTask == task)
                 {
                     await task;  // Very important in order to propagate exceptions
+                    return;
                 }
 
                 throw new OperationCanceledException(message);

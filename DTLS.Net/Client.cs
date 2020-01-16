@@ -48,8 +48,6 @@ namespace DTLS
         private const int MAXPACKETSIZE = 1440;
 
         private static readonly Version _SupportedVersion = DTLSRecord.Version1_2;
-        private readonly ManualResetEvent _TriggerProcessRecords = new ManualResetEvent(false);
-        private readonly ManualResetEvent _Connected = new ManualResetEvent(false);
         private readonly HandshakeInfo _HandshakeInfo = new HandshakeInfo();
         private readonly DTLSRecords _Records = new DTLSRecords();
         private readonly List<byte[]> _FragmentedRecordList = new List<byte[]>();
@@ -72,6 +70,8 @@ namespace DTLS
         private bool _IsFragment = false;
         private PSKIdentity _PSKIdentity;
 
+        private bool _ConnectionComplete = false;
+        private bool _ShouldTriggerRecordProccess = false;
         private long _SequenceNumber = -1; //realy only 48 bit
 
         public EndPoint LocalEndPoint { get; }
@@ -398,7 +398,7 @@ namespace DTLS
                             if (serverFinished.VerifyData.SequenceEqual(calculatedVerifyData))
                             {
                                 Console.WriteLine("Handshake Complete");
-                                this._Connected.Set();
+                                this._ConnectionComplete = true;
                             }
                             break;
                         }
@@ -460,14 +460,14 @@ namespace DTLS
                             }
                             if (alertRecord.AlertLevel == TAlertLevel.Fatal)
                             {
-                                this._Connected.Set();
+                                this._ConnectionComplete = true;
                             }
                             else if ((alertRecord.AlertLevel == TAlertLevel.Warning) || (alertRecord.AlertDescription == TAlertDescription.CloseNotify))
                             {
                                 if (alertRecord.AlertDescription == TAlertDescription.CloseNotify)
                                 {
                                     await this.SendAlert(TAlertLevel.Warning, TAlertDescription.CloseNotify);
-                                    this._Connected.Set();
+                                    this._ConnectionComplete = true;
                                 }
                             }
                             break;
@@ -503,7 +503,7 @@ namespace DTLS
         {
             while (!this._Terminate)
             {
-                this._TriggerProcessRecords.Reset();
+                this._ShouldTriggerRecordProccess = true;
                 var record = this._Records.PeekRecord();
                 while (record != null)
                 {
@@ -529,7 +529,10 @@ namespace DTLS
                 }
                 if (!this._Terminate)
                 {
-                    this._TriggerProcessRecords.WaitOne();
+                    while (!this._ShouldTriggerRecordProccess)
+                    {
+                        await Task.Delay(100);
+                    }
                 }
             }
         }
@@ -575,7 +578,7 @@ namespace DTLS
                     var record = DTLSRecord.Deserialise(stream);
                     record.RemoteEndPoint = ip;
                     this._Records.Add(record);
-                    this._TriggerProcessRecords.Set();
+                    this._ShouldTriggerRecordProccess = true;
                 }
             }
         }
@@ -967,7 +970,11 @@ namespace DTLS
             Task.Run(() => this.ProcessRecords());
             Task.Run(() => this.StartReceive(this._Socket));
             await this.SendHello(null);
-            this._Connected.WaitOne();
+
+            while (!this._ConnectionComplete)
+            {
+                await Task.Delay(100);
+            }
         }
 
 #if !NETSTANDARD2_0
@@ -1078,7 +1085,7 @@ namespace DTLS
             if (this._Socket != null)
             {
                 this._Terminate = true;
-                this._TriggerProcessRecords.Set();
+                this._ShouldTriggerRecordProccess = true;
                 await this.SendAlert(TAlertLevel.Fatal, TAlertDescription.CloseNotify);
                 await Task.Delay(100);
                 this._Socket.Dispose();

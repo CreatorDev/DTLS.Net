@@ -17,10 +17,11 @@
     <DelaySign>false</DelaySign>
     <AssemblyOriginatorKeyFile>DTLS.Net.snk</AssemblyOriginatorKeyFile>
     <AssemblyName>DTLS2.Net</AssemblyName>
-    <Version>1.0.8</Version>
+    <Version>1.0.9</Version>
     <PackageReleaseNotes>
-      Breaking changes - made real async functions now, removed the blocking functions
+      Breaking changes - made real async functions now that will need awaited, removed the blocking functions
       Created a Task extension to await (non-blocking) for a task to complete within a timeout
+      Replaced the ManualResetEvents with a boolean flag because it was blocking
       Replaced NETSTANDARD1_3 with NETSTANDARD2_0
       Added NETCOREAPP3_1 as a target in the test console apps
     </PackageReleaseNotes>
