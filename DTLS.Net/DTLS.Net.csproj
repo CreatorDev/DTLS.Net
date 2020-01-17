@@ -17,10 +17,9 @@
     <DelaySign>false</DelaySign>
     <AssemblyOriginatorKeyFile>DTLS.Net.snk</AssemblyOriginatorKeyFile>
     <AssemblyName>DTLS2.Net</AssemblyName>
-    <Version>1.0.11</Version>
+    <Version>1.0.12</Version>
     <PackageReleaseNotes>
-      Using an action instead of an event to call after receiving data since it was really used like that anyway
-      Created function to receive the data and to send and receive all in one with and without timeout
+      Fixed the bouncy castle version for netstandard2.0, everything can use the most recent now
     </PackageReleaseNotes>
   </PropertyGroup>
 
@@ -30,12 +29,11 @@
     <Folder Include="PSK\" />
   </ItemGroup>
 
-  <ItemGroup Condition=" '$(TargetFramework)' != 'netstandard2.0' ">
+  <ItemGroup>
     <PackageReference Include="Portable.BouncyCastle" Version="1.8.5.2" />
   </ItemGroup>
 
   <ItemGroup Condition=" '$(TargetFramework)' == 'netstandard2.0' ">
-    <PackageReference Include="Portable.BouncyCastle" Version="1.8.4" />
     <PackageReference Include="System.Threading.Thread" Version="4.3.0" />
     <PackageReference Include="System.Threading.ThreadPool" Version="4.3.0" />
     <PackageReference Include="System.Security.Cryptography.Cng" Version="4.6.1" />
