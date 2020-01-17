@@ -17,14 +17,10 @@
     <DelaySign>false</DelaySign>
     <AssemblyOriginatorKeyFile>DTLS.Net.snk</AssemblyOriginatorKeyFile>
     <AssemblyName>DTLS2.Net</AssemblyName>
-    <Version>1.0.10</Version>
+    <Version>1.0.11</Version>
     <PackageReleaseNotes>
-      Breaking changes - made real async functions now that will need awaited, removed the blocking functions
-      Created a Task extension to await (non-blocking) for a task to complete within a timeout
-      The send functions are real async and can now take a timeout
-      Replaced the ManualResetEvents with a boolean flag because it was blocking
-      Replaced NETSTANDARD1_3 with NETSTANDARD2_0
-      Added more targets in the test console apps
+      Using an action instead of an event to call after receiving data since it was really used like that anyway
+      Created function to receive the data and to send and receive all in one with and without timeout
     </PackageReleaseNotes>
   </PropertyGroup>
 

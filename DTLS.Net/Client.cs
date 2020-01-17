@@ -42,9 +42,6 @@ namespace DTLS
 {
     public class Client
     {
-        public delegate void DataReceivedEventHandler(EndPoint endPoint, byte[] data);
-        public event DataReceivedEventHandler DataReceived;
-
         private const int MAXPACKETSIZE = 1440;
 
         private static readonly Version _SupportedVersion = DTLSRecord.Version1_2;
@@ -52,8 +49,8 @@ namespace DTLS
         private readonly DTLSRecords _Records = new DTLSRecords();
         private readonly List<byte[]> _FragmentedRecordList = new List<byte[]>();
 
+        private Action<EndPoint, byte[]> _DataReceivedFunction;
         private Socket _Socket;
-        private byte[] _RecvDataBuffer = new byte[0];
         private bool _Terminate;
         private EndPoint _ServerEndPoint;
         private ushort? _ServerEpoch;
@@ -67,9 +64,11 @@ namespace DTLS
         private IHandshakeMessage _ClientKeyExchange;
         private Certificate _Certificate;
         private AsymmetricKeyParameter _PrivateKey;
-        private bool _IsFragment = false;
         private PSKIdentity _PSKIdentity;
 
+        private byte[] _ReceivedData = new byte[0];
+        private byte[] _RecvDataBuffer = new byte[0];
+        private bool _IsFragment = false;
         private bool _ConnectionComplete = false;
         private bool _ShouldTriggerRecordProccess = false;
         private long _SequenceNumber = -1; //realy only 48 bit
@@ -421,6 +420,7 @@ namespace DTLS
                 {
                     case TRecordType.ChangeCipherSpec:
                         {
+                            this._ReceivedData = new byte[0];
                             if (this._ServerEpoch.HasValue)
                             {
                                 this._ServerEpoch++;
@@ -431,6 +431,7 @@ namespace DTLS
                         }
                     case TRecordType.Alert:
                         {
+                            this._ReceivedData = new byte[0];
                             AlertRecord alertRecord;
                             try
                             {
@@ -468,6 +469,7 @@ namespace DTLS
                         }
                     case TRecordType.Handshake:
                         {
+                            this._ReceivedData = new byte[0];
                             await this.ProcessHandshake(record);
                             this._ServerSequenceNumber = record.SequenceNumber + 1;
                             break;
@@ -478,7 +480,8 @@ namespace DTLS
                             {
                                 var sequenceNumber = ((long)record.Epoch << 48) + record.SequenceNumber;
                                 var data = this._Cipher.DecodeCiphertext(sequenceNumber, (byte)TRecordType.ApplicationData, record.Fragment, 0, record.Fragment.Length);
-                                DataReceived?.Invoke(record.RemoteEndPoint, data);
+                                this._DataReceivedFunction?.Invoke(record.RemoteEndPoint, data);
+                                this._ReceivedData = data;
                             }
                             this._ServerSequenceNumber = record.SequenceNumber + 1;
                             break;
@@ -600,7 +603,11 @@ namespace DTLS
             return result;
         }
 
-        public async Task SendWithTimeoutAsync(byte[] data, int timeout) => await this.SendAsync(data).TimeoutAfter(timeout, "Failure to send data");
+        public async Task SendWithTimeoutAsync(byte[] data, int timeout) => 
+            await this.SendAsync(data).TimeoutAfter(timeout, "Failure to send data");
+
+        public async Task SendWithTimeoutAsync(byte[] data) => 
+            await this.SendWithTimeoutAsync(data, 1000);
 
         public async Task SendAsync(byte[] data)
         {
@@ -638,6 +645,34 @@ namespace DTLS
             }
 
             await this._Socket.SendAsAsync(recordBytes);
+        }
+
+        public async Task<byte[]> SendAndGetResponseWithTimeoutAsync(byte[] data, int timeout) => 
+            await this.SendAndGetResponseAsync(data).TimeoutAfter(timeout, "Timed Out Sending/Receiving Data");
+
+        public async Task<byte[]> SendAndGetResonseWithTimeoutAsync(byte[] data) => 
+            await this.SendAndGetResponseWithTimeoutAsync(data, 5000);
+
+        public async Task<byte[]> SendAndGetResponseAsync(byte[] data)
+        {
+            await this.SendAsync(data);
+            return await this.ReceiveDataAsync();
+        }
+
+        public async Task<byte[]> ReceiveDataWithTimeoutAsync() =>
+            await this.ReceiveDataWithTimeoutAsync(5000);
+
+        public async Task<byte[]> ReceiveDataWithTimeoutAsync(int receiveTimeout) => 
+            await this.ReceiveDataAsync().TimeoutAfter(receiveTimeout, "Did Not Receive Data Back");
+
+        public async Task<byte[]> ReceiveDataAsync()
+        {
+            while (this._ReceivedData == null || !this._ReceivedData.Any())
+            {
+                await Task.Delay(100);
+            }
+
+            return this._ReceivedData;
         }
 
         private async Task SendAlertWithTimeoutAsync(TAlertLevel alertLevel, TAlertDescription alertDescription) =>
@@ -1065,6 +1100,8 @@ namespace DTLS
                 }
             }
         }
+
+        public void SetDataReceivedFunction(Action<EndPoint, byte[]> function) => this._DataReceivedFunction = function;
 
         public void SetVersion(Version version) => this._Version = version ?? throw new ArgumentNullException(nameof(version));
 
