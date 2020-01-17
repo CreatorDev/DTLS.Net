@@ -27,6 +27,7 @@ namespace DTLS
 {
     internal class DTLSRecords
     {
+        private readonly object _Lock = new object();
         private readonly List<DTLSRecord> _Records;
 
         public DTLSRecords() => this._Records = new List<DTLSRecord>();
@@ -38,7 +39,7 @@ namespace DTLS
                 throw new ArgumentNullException(nameof(record));
             }
 
-            lock (this._Records)
+            lock (this._Lock)
             {
                 var index = 0;
                 var added = false;
@@ -78,7 +79,7 @@ namespace DTLS
         public DTLSRecord PeekRecord()
         {
             DTLSRecord result = null;
-            lock (this._Records)
+            lock (this._Lock)
             {
                 if (this._Records.Count > 0)
                 {
@@ -90,7 +91,7 @@ namespace DTLS
 
         public void RemoveRecord()
         {
-            lock (this._Records)
+            lock (this._Lock)
             {
                 this._Records.RemoveAt(0);
             }

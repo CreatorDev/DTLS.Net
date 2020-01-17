@@ -40,7 +40,7 @@ using System.Threading.Tasks;
 
 namespace DTLS
 {
-    public class Client
+    public class Client : IDisposable
     {
         private const int MAXPACKETSIZE = 1440;
 
@@ -49,6 +49,8 @@ namespace DTLS
         private readonly DTLSRecords _Records = new DTLSRecords();
         private readonly List<byte[]> _FragmentedRecordList = new List<byte[]>();
 
+        private Task _ReceiveTask;
+        private Task _ProcessRecordTask;
         private Action<EndPoint, byte[]> _DataReceivedFunction;
         private Socket _Socket;
         private bool _Terminate;
@@ -66,11 +68,13 @@ namespace DTLS
         private AsymmetricKeyParameter _PrivateKey;
         private PSKIdentity _PSKIdentity;
 
+        private CancellationTokenSource _Cts = new CancellationTokenSource();
         private byte[] _ReceivedData = new byte[0];
         private byte[] _RecvDataBuffer = new byte[0];
         private bool _IsFragment = false;
         private bool _ConnectionComplete = false;
         private bool _ShouldTriggerRecordProccess = false;
+        private bool _Disposed = false;
         private long _SequenceNumber = -1; //realy only 48 bit
 
         public EndPoint LocalEndPoint { get; }
@@ -524,12 +528,10 @@ namespace DTLS
                         record = this._Records.PeekRecord();
                     }
                 }
-                if (!this._Terminate)
+
+                while (!this._ShouldTriggerRecordProccess && !this._Terminate)
                 {
-                    while (!this._ShouldTriggerRecordProccess)
-                    {
-                        await Task.Delay(100);
-                    }
+                    await Task.Delay(100);
                 }
             }
         }
@@ -995,8 +997,8 @@ namespace DTLS
 
             this._Socket = await this.SetupSocket();
 #pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-            Task.Run(() => this.ProcessRecords()); //fire and forget
-            Task.Run(() => this.StartReceive(this._Socket)); // fire and forget
+            this._ProcessRecordTask  = Task.Run(() => this.ProcessRecords(), this._Cts.Token); //fire and forget
+            this._ReceiveTask = Task.Run(() => this.StartReceive(this._Socket), this._Cts.Token); // fire and forget
 #pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
             await this.SendHelloAsync(null);
 
@@ -1105,17 +1107,41 @@ namespace DTLS
 
         public void SetVersion(Version version) => this._Version = version ?? throw new ArgumentNullException(nameof(version));
 
-        public async Task StopAsync()
+        private void Dispose(bool disposing)
         {
-            if (this._Socket != null)
+            //prevent multiple calls to Dispose
+            if (this._Disposed)
+            {
+                return;
+            }
+
+            if (disposing)
             {
                 this._Terminate = true;
                 this._ShouldTriggerRecordProccess = true;
-                await this.SendAlertWithTimeoutAsync(TAlertLevel.Fatal, TAlertDescription.CloseNotify);
-                await Task.Delay(100);
-                this._Socket.Dispose();
-                this._Socket = null;
+
+                if (this._Socket != null)
+                {
+                    this.SendAlertWithTimeoutAsync(TAlertLevel.Fatal, TAlertDescription.CloseNotify).GetAwaiter().GetResult();
+                    this._Socket.Dispose();
+                    this._Socket = null;
+                }
+
+                this._Cts.Cancel();
+                this._ReceiveTask = null;
+                this._ProcessRecordTask = null;
             }
+
+            //Tell the GC not to call the finalizer later
+            GC.SuppressFinalize(this);
+            this._Disposed = true;
+        }
+
+        public void Dispose() => this.Dispose(true);
+
+        ~Client()
+        {
+            this.Dispose(false);
         }
     }
 }

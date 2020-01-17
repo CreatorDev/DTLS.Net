@@ -19,7 +19,10 @@
     <AssemblyName>DTLS2.Net</AssemblyName>
     <Version>1.0.12</Version>
     <PackageReleaseNotes>
-      Fixed the bouncy castle version for netstandard2.0, everything can use the most recent now
+      Made Client Disposable 
+Holding onto instances of the tasks that are fired and forgotten so they don't get GC'd and so that we can cancel them at dispose.
+In ProcessRecords we're now looping until _ShouldTriggerRecordProccess OR _Terminate
+Using a separate object to lock modifying the DTLS records list
     </PackageReleaseNotes>
   </PropertyGroup>
 
