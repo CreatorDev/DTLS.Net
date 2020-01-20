@@ -441,12 +441,13 @@ namespace DTLS
                 throw new ArgumentNullException(nameof(premaster));
             }
 
-#if NETSTANDARD2_1 || NETSTANDARD2_0
+
             var certificate = new X509Certificate2(cert);
+
+#if NETSTANDARD2_1 || NETSTANDARD2_0
             var rsa = (RSACng)certificate.PublicKey.Key;
             return rsa.Encrypt(premaster, RSAEncryptionPadding.Pkcs1);
 #else
-            var certificate = new X509Certificate2(cert);
             var rsa = (RSACryptoServiceProvider)certificate.PublicKey.Key;
             return rsa.Encrypt(premaster, false);
 #endif

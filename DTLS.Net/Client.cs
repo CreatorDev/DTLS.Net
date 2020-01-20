@@ -48,6 +48,7 @@ namespace DTLS
         private readonly HandshakeInfo _HandshakeInfo = new HandshakeInfo();
         private readonly DTLSRecords _Records = new DTLSRecords();
         private readonly List<byte[]> _FragmentedRecordList = new List<byte[]>();
+        private readonly CancellationTokenSource _Cts = new CancellationTokenSource();
 
         private Task _ReceiveTask;
         private Task _ProcessRecordTask;
@@ -68,12 +69,10 @@ namespace DTLS
         private AsymmetricKeyParameter _PrivateKey;
         private PSKIdentity _PSKIdentity;
 
-        private CancellationTokenSource _Cts = new CancellationTokenSource();
         private byte[] _ReceivedData = new byte[0];
         private byte[] _RecvDataBuffer = new byte[0];
         private bool _IsFragment = false;
         private bool _ConnectionComplete = false;
-        private bool _ShouldTriggerRecordProccess = false;
         private bool _Disposed = false;
         private long _SequenceNumber = -1; //realy only 48 bit
 
@@ -412,13 +411,13 @@ namespace DTLS
 
         private async Task ProcessRecord(DTLSRecord record)
         {
-            if(record == null)
-            {
-                throw new ArgumentNullException(nameof(record));
-            }
-
             try
             {
+                if (record == null)
+                {
+                    throw new ArgumentNullException(nameof(record));
+                }
+
                 Console.WriteLine(record.RecordType.ToString());
                 switch (record.RecordType)
                 {
@@ -504,22 +503,12 @@ namespace DTLS
         {
             while (!this._Terminate)
             {
-                this._ShouldTriggerRecordProccess = true;
                 var record = this._Records.PeekRecord();
                 while (record != null)
                 {
-                    if (this._ServerEpoch.HasValue)
+                    if (this._ServerEpoch.HasValue && (this._ServerSequenceNumber != record.SequenceNumber || this._ServerEpoch != record.Epoch))
                     {
-                        if ((this._ServerSequenceNumber == record.SequenceNumber) && (this._ServerEpoch == record.Epoch))
-                        {
-                            this._Records.RemoveRecord();
-                            await this.ProcessRecord(record);
-                            record = this._Records.PeekRecord();
-                        }
-                        else
-                        {
-                            record = null;
-                        }
+                       record = null;
                     }
                     else
                     {
@@ -529,10 +518,7 @@ namespace DTLS
                     }
                 }
 
-                while (!this._ShouldTriggerRecordProccess && !this._Terminate)
-                {
-                    await Task.Delay(100);
-                }
+                await Task.Delay(100);
             }
         }
 
@@ -577,7 +563,6 @@ namespace DTLS
                     var record = DTLSRecord.Deserialise(stream);
                     record.RemoteEndPoint = ip;
                     this._Records.Add(record);
-                    this._ShouldTriggerRecordProccess = true;
                 }
             }
         }
@@ -585,10 +570,10 @@ namespace DTLS
         private async Task<Socket> SetupSocket()
         {
             var addressFamily = this.LocalEndPoint.AddressFamily;
-            var result = new Socket(addressFamily, SocketType.Dgram, ProtocolType.Udp);
+            var soc = new Socket(addressFamily, SocketType.Dgram, ProtocolType.Udp);
             if (addressFamily == AddressFamily.InterNetworkV6)
             {
-                result.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, true);
+                soc.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, true);
             }
 #if NET452 || NET47
             if (Environment.OSVersion.Platform != PlatformID.Unix)
@@ -598,11 +583,11 @@ namespace DTLS
             {
                 // do not throw SocketError.ConnectionReset by ignoring ICMP Port Unreachable
                 const int SIO_UDP_CONNRESET = -1744830452;
-                result.IOControl(SIO_UDP_CONNRESET, new byte[] { 0 }, null);
+                soc.IOControl(SIO_UDP_CONNRESET, new byte[] { 0 }, null);
             }
 
-            await result.ConnectAsync(this._ServerEndPoint);
-            return result;
+            await soc.ConnectAsync(this._ServerEndPoint);
+            return soc;
         }
 
         public async Task SendWithTimeoutAsync(byte[] data, int timeout) => 
@@ -911,8 +896,8 @@ namespace DTLS
             clientHello.Extensions = new Extensions
             {
                 new Extension() { ExtensionType = TExtensionType.SessionTicketTLS },
-                //new Extension() { ExtensionType = TExtensionType.EncryptThenMAC },
-                //new Extension() { ExtensionType = TExtensionType.ExtendedMasterSecret },
+                new Extension() { ExtensionType = TExtensionType.EncryptThenMAC },
+                new Extension() { ExtensionType = TExtensionType.ExtendedMasterSecret },
             };
 
             var ellipticCurvesExtension = new EllipticCurvesExtension();
@@ -1118,7 +1103,6 @@ namespace DTLS
             if (disposing)
             {
                 this._Terminate = true;
-                this._ShouldTriggerRecordProccess = true;
 
                 if (this._Socket != null)
                 {
