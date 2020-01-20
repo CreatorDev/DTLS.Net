@@ -1106,7 +1106,7 @@ namespace DTLS
 
                 if (this._Socket != null)
                 {
-                    this.SendAlertWithTimeoutAsync(TAlertLevel.Fatal, TAlertDescription.CloseNotify).ConfigureAwait(false).GetAwaiter().GetResult();
+                    Task.Run(() => this.SendAlertWithTimeoutAsync(TAlertLevel.Fatal, TAlertDescription.CloseNotify)).ConfigureAwait(false).GetAwaiter().GetResult();
                     this._Socket.Dispose();
                     this._Socket = null;
                 }
