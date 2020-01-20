@@ -124,7 +124,7 @@ namespace DTLS
                 var count = 0;
                 while ((this._Cipher == null) && (count < 500))
                 {
-                    await Task.Delay(10);
+                    await Task.Delay(10).ConfigureAwait(false);
                     count++;
                 }
 
@@ -202,7 +202,7 @@ namespace DTLS
                         {
                             var helloVerifyRequest = HelloVerifyRequest.Deserialise(stream);
                             this._Version = helloVerifyRequest.ServerVersion;
-                            await this.SendHelloAsync(helloVerifyRequest.Cookie);
+                            await this.SendHelloAsync(helloVerifyRequest.Cookie).ConfigureAwait(false);
                             break;
                         }
                     case THandshakeType.Certificate:
@@ -330,10 +330,10 @@ namespace DTLS
 
                             if (this._SendCertificate)
                             {
-                                await this.SendHandshakeMessageWithTimeoutAsync(this._Certificate, false);
+                                await this.SendHandshakeMessageWithTimeoutAsync(this._Certificate, false).ConfigureAwait(false);
                             }
 
-                            await this.SendHandshakeMessageWithTimeoutAsync(this._ClientKeyExchange, false);
+                            await this.SendHandshakeMessageWithTimeoutAsync(this._ClientKeyExchange, false).ConfigureAwait(false);
 
                             if (this._SendCertificate)
                             {
@@ -349,17 +349,17 @@ namespace DTLS
                                     Signature = TLSUtils.Sign(this._PrivateKey, this._PrivateKeyRsa, true, this._Version, this._HandshakeInfo, signatureHashAlgorithm, this._HandshakeInfo.GetHash(this._Version))
                                 };
 
-                                await this.SendHandshakeMessageWithTimeoutAsync(certVerify, false);
+                                await this.SendHandshakeMessageWithTimeoutAsync(certVerify, false).ConfigureAwait(false);
                             }
 
-                            await this.SendChangeCipherSpecWithTimeoutAsync();
+                            await this.SendChangeCipherSpecWithTimeoutAsync().ConfigureAwait(false);
                             var handshakeHash = this._HandshakeInfo.GetHash(this._Version);
                             var finished = new Finished
                             {
                                 VerifyData = TLSUtils.GetVerifyData(this._Version, this._HandshakeInfo, true, true, handshakeHash)
                             };
 
-                            await this.SendHandshakeMessageWithTimeoutAsync(finished, true);
+                            await this.SendHandshakeMessageWithTimeoutAsync(finished, true).ConfigureAwait(false);
 #if DEBUG
                             Console.Write("Handshake Hash:");
                             TLSUtils.WriteToConsole(handshakeHash);
@@ -464,7 +464,7 @@ namespace DTLS
                             {
                                 if (alertRecord.AlertDescription == TAlertDescription.CloseNotify)
                                 {
-                                    await this.SendAlertWithTimeoutAsync(TAlertLevel.Warning, TAlertDescription.CloseNotify);
+                                    await this.SendAlertWithTimeoutAsync(TAlertLevel.Warning, TAlertDescription.CloseNotify).ConfigureAwait(false);
                                     this._ConnectionComplete = true;
                                 }
                             }
@@ -473,7 +473,7 @@ namespace DTLS
                     case TRecordType.Handshake:
                         {
                             this._ReceivedData = new byte[0];
-                            await this.ProcessHandshake(record);
+                            await this.ProcessHandshake(record).ConfigureAwait(false);
                             this._ServerSequenceNumber = record.SequenceNumber + 1;
                             break;
                         }
@@ -513,12 +513,12 @@ namespace DTLS
                     else
                     {
                         this._Records.RemoveRecord();
-                        await this.ProcessRecord(record);
+                        await this.ProcessRecord(record).ConfigureAwait(false);
                         record = this._Records.PeekRecord();
                     }
                 }
-
-                await Task.Delay(100);
+                
+                await Task.Delay(100).ConfigureAwait(false);
             }
         }
 
@@ -586,15 +586,15 @@ namespace DTLS
                 soc.IOControl(SIO_UDP_CONNRESET, new byte[] { 0 }, null);
             }
 
-            await soc.ConnectAsync(this._ServerEndPoint);
+            await soc.ConnectAsync(this._ServerEndPoint).ConfigureAwait(false);
             return soc;
         }
 
         public async Task SendWithTimeoutAsync(byte[] data, int timeout) => 
-            await this.SendAsync(data).TimeoutAfter(timeout, "Failure to send data");
+            await this.SendAsync(data).TimeoutAfter(timeout, "Failure to send data").ConfigureAwait(false);
 
         public async Task SendWithTimeoutAsync(byte[] data) => 
-            await this.SendWithTimeoutAsync(data, 1000);
+            await this.SendWithTimeoutAsync(data, 1000).ConfigureAwait(false);
 
         public async Task SendAsync(byte[] data)
         {
@@ -631,42 +631,42 @@ namespace DTLS
                 record.Serialise(stream);
             }
 
-            await this._Socket.SendAsAsync(recordBytes);
+            await this._Socket.SendAsAsync(recordBytes).ConfigureAwait(false);
         }
 
         public async Task<byte[]> SendAndGetResponseWithTimeoutAsync(byte[] data, int timeout) => 
-            await this.SendAndGetResponseAsync(data).TimeoutAfter(timeout, "Timed Out Sending/Receiving Data");
+            await this.SendAndGetResponseAsync(data).TimeoutAfter(timeout, "Timed Out Sending/Receiving Data").ConfigureAwait(false);
 
         public async Task<byte[]> SendAndGetResonseWithTimeoutAsync(byte[] data) => 
-            await this.SendAndGetResponseWithTimeoutAsync(data, 5000);
+            await this.SendAndGetResponseWithTimeoutAsync(data, 5000).ConfigureAwait(false);
 
         public async Task<byte[]> SendAndGetResponseAsync(byte[] data)
         {
-            await this.SendAsync(data);
-            return await this.ReceiveDataAsync();
+            await this.SendAsync(data).ConfigureAwait(false);
+            return await this.ReceiveDataAsync().ConfigureAwait(false);
         }
 
         public async Task<byte[]> ReceiveDataWithTimeoutAsync() =>
-            await this.ReceiveDataWithTimeoutAsync(5000);
+            await this.ReceiveDataWithTimeoutAsync(5000).ConfigureAwait(false);
 
         public async Task<byte[]> ReceiveDataWithTimeoutAsync(int receiveTimeout) => 
-            await this.ReceiveDataAsync().TimeoutAfter(receiveTimeout, "Did Not Receive Data Back");
+            await this.ReceiveDataAsync().TimeoutAfter(receiveTimeout, "Did Not Receive Data Back").ConfigureAwait(false);
 
         public async Task<byte[]> ReceiveDataAsync()
         {
             while (this._ReceivedData == null || !this._ReceivedData.Any())
             {
-                await Task.Delay(100);
+                await Task.Delay(100).ConfigureAwait(false);
             }
 
             return this._ReceivedData;
         }
 
         private async Task SendAlertWithTimeoutAsync(TAlertLevel alertLevel, TAlertDescription alertDescription) =>
-           await this.SendAlertWithTimeoutAsync(alertLevel, alertDescription, 1000);
+           await this.SendAlertWithTimeoutAsync(alertLevel, alertDescription, 1000).ConfigureAwait(false);
 
         private async Task SendAlertWithTimeoutAsync(TAlertLevel alertLevel, TAlertDescription alertDescription, int timeout) => 
-            await this.SendAlertAsync(alertLevel, alertDescription).TimeoutAfter(timeout, "Could Not Send Alert Message");
+            await this.SendAlertAsync(alertLevel, alertDescription).TimeoutAfter(timeout, "Could Not Send Alert Message").ConfigureAwait(false);
 
         private async Task SendAlertAsync(TAlertLevel alertLevel, TAlertDescription alertDescription)
         {
@@ -696,14 +696,14 @@ namespace DTLS
                 record.Serialise(stream);
             }
 
-            await this._Socket.SendAsAsync(recordBytes);
+            await this._Socket.SendAsAsync(recordBytes).ConfigureAwait(false);
         }
 
         private async Task SendChangeCipherSpecWithTimeoutAsync() =>
-            await this.SendChangeCipherSpecWithTimeoutAsync(1000);
+            await this.SendChangeCipherSpecWithTimeoutAsync(1000).ConfigureAwait(false);
 
         private async Task SendChangeCipherSpecWithTimeoutAsync(int timeout) => 
-            await this.SendChangeCipherSpecAsync().TimeoutAfter(timeout, "Could Not Send Change Cipher Spec");
+            await this.SendChangeCipherSpecAsync().TimeoutAfter(timeout, "Could Not Send Change Cipher Spec").ConfigureAwait(false);
 
         private async Task SendChangeCipherSpecAsync()
         {
@@ -713,7 +713,7 @@ namespace DTLS
             }
 
             var bytes = this.GetChangeCipherSpec();
-            await this._Socket.SendAsAsync(bytes);
+            await this._Socket.SendAsAsync(bytes).ConfigureAwait(false);
             this.ChangeEpoch();
         }
 
@@ -916,14 +916,14 @@ namespace DTLS
             var signatureAlgorithmsExtension = new SignatureAlgorithmsExtension();
             signatureAlgorithmsExtension.SupportedAlgorithms.Add(new SignatureHashAlgorithm() { Hash = THashAlgorithm.SHA1, Signature = TSignatureAlgorithm.RSA });
             clientHello.Extensions.Add(new Extension(signatureAlgorithmsExtension));
-            await this.SendHandshakeMessageWithTimeoutAsync(clientHello, false);
+            await this.SendHandshakeMessageWithTimeoutAsync(clientHello, false).ConfigureAwait(false);
         }
 
         private async Task SendHandshakeMessageWithTimeoutAsync(IHandshakeMessage handshakeMessage, bool encrypt) =>
-            await this.SendHandshakeMessageWithTimeoutAsync(handshakeMessage, encrypt, 1000);
+            await this.SendHandshakeMessageWithTimeoutAsync(handshakeMessage, encrypt, 1000).ConfigureAwait(false);
 
         private async Task SendHandshakeMessageWithTimeoutAsync(IHandshakeMessage handshakeMessage, bool encrypt, int timeout) =>
-            await this.SendHandshakeMessageAsync(handshakeMessage, encrypt).TimeoutAfter(timeout, "Could not send handshake message");
+            await this.SendHandshakeMessageAsync(handshakeMessage, encrypt).TimeoutAfter(timeout, "Could not send handshake message").ConfigureAwait(false);
 
         private async Task SendHandshakeMessageAsync(IHandshakeMessage handshakeMessage, bool encrypt)
         {
@@ -938,7 +938,7 @@ namespace DTLS
             }
 
             var bytes = this.GetBytes(handshakeMessage, encrypt);
-            await this._Socket.SendAsAsync(bytes);
+            await this._Socket.SendAsAsync(bytes).ConfigureAwait(false);
         }
 
         public async Task ConnectToServerWithTimeoutAsync(EndPoint serverEndPoint)
@@ -949,7 +949,7 @@ namespace DTLS
             }
 
             var defaultTimeout = 1000;
-            await this.ConnectToServerWithTimeoutAsync(serverEndPoint, defaultTimeout);
+            await this.ConnectToServerWithTimeoutAsync(serverEndPoint, defaultTimeout).ConfigureAwait(false);
         }
 
         public async Task ConnectToServerWithTimeoutAsync(EndPoint serverEndPoint, int timeout)
@@ -964,7 +964,7 @@ namespace DTLS
                 throw new ArgumentOutOfRangeException(nameof(timeout));
             }
 
-            await this.ConnectToServerAsync(serverEndPoint).TimeoutAfter(timeout, "Could Not Connect To Server");
+            await this.ConnectToServerAsync(serverEndPoint).TimeoutAfter(timeout, "Could Not Connect To Server").ConfigureAwait(false);
         }
 
         public async Task ConnectToServerAsync(EndPoint serverEndPoint)
@@ -980,16 +980,16 @@ namespace DTLS
                 this.SupportedCipherSuites.Add(TCipherSuite.TLS_RSA_WITH_AES_256_CBC_SHA);
             }
 
-            this._Socket = await this.SetupSocket();
+            this._Socket = await this.SetupSocket().ConfigureAwait(false);
 #pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-            this._ProcessRecordTask  = Task.Run(() => this.ProcessRecords(), this._Cts.Token); //fire and forget
-            this._ReceiveTask = Task.Run(() => this.StartReceive(this._Socket), this._Cts.Token); // fire and forget
+            this._ProcessRecordTask  = Task.Run(() => this.ProcessRecords().ConfigureAwait(false), this._Cts.Token); //fire and forget
+            this._ReceiveTask = Task.Run(() => this.StartReceive(this._Socket).ConfigureAwait(false), this._Cts.Token); // fire and forget
 #pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-            await this.SendHelloAsync(null);
+            await this.SendHelloAsync(null).ConfigureAwait(false);
 
             while (!this._ConnectionComplete)
             {
-                await Task.Delay(100);
+                await Task.Delay(100).ConfigureAwait(false);
             }
         }
 
@@ -1073,7 +1073,7 @@ namespace DTLS
                 if (available > 0)
                 {
                     var buffer = new byte[available];
-                    var recvd = await socket.ReceiveAsAsync(buffer);
+                    var recvd = await socket.ReceiveAsAsync(buffer).ConfigureAwait(false);
                     if (recvd < available)
                     {
                         buffer = buffer.Take(recvd).ToArray();
@@ -1083,7 +1083,7 @@ namespace DTLS
                 }
                 else
                 {
-                    await Task.Delay(100);
+                    await Task.Delay(100).ConfigureAwait(false);
                 }
             }
         }
@@ -1106,7 +1106,7 @@ namespace DTLS
 
                 if (this._Socket != null)
                 {
-                    this.SendAlertWithTimeoutAsync(TAlertLevel.Fatal, TAlertDescription.CloseNotify).GetAwaiter().GetResult();
+                    this.SendAlertWithTimeoutAsync(TAlertLevel.Fatal, TAlertDescription.CloseNotify).ConfigureAwait(false).GetAwaiter().GetResult();
                     this._Socket.Dispose();
                     this._Socket = null;
                 }

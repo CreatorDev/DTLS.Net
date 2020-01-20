@@ -33,11 +33,11 @@ namespace DTLS.Net
         {
             using (var timeoutCancellationTokenSource = new CancellationTokenSource())
             {
-                var completedTask = await Task.WhenAny(task, Task.Delay(timeout, timeoutCancellationTokenSource.Token));
+                var completedTask = await Task.WhenAny(task, Task.Delay(timeout, timeoutCancellationTokenSource.Token)).ConfigureAwait(false);
                 timeoutCancellationTokenSource.Cancel();
                 if (completedTask == task)
                 {
-                    return await task;  // Very important in order to propagate exceptions
+                    return await task.ConfigureAwait(false);  // Very important in order to propagate exceptions
                 }
                 
                 throw new OperationCanceledException(message);
@@ -48,11 +48,11 @@ namespace DTLS.Net
         {
             using (var timeoutCancellationTokenSource = new CancellationTokenSource())
             {
-                var completedTask = await Task.WhenAny(task, Task.Delay(timeout, timeoutCancellationTokenSource.Token));
+                var completedTask = await Task.WhenAny(task, Task.Delay(timeout, timeoutCancellationTokenSource.Token)).ConfigureAwait(false);
                 timeoutCancellationTokenSource.Cancel();
                 if (completedTask == task)
                 {
-                    await task;  // Very important in order to propagate exceptions
+                    await task.ConfigureAwait(false);  // Very important in order to propagate exceptions
                     return;
                 }
 

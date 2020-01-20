@@ -47,28 +47,29 @@ namespace TestClient
             var exit = false;
             Console.WriteLine("Press any key to Connect to Server");
             Console.ReadKey(true);
-            var client = new Client(new IPEndPoint(IPAddress.Any, 56239));
-            client.PSKIdentities.AddIdentity(Encoding.UTF8.GetBytes("oFIrQFrW8EWcZ5u7eGfrkw"), HexToBytes("7CCDE14A5CF3B71C0C08C8B7F9E5"));
-            client.LoadCertificateFromPem(@"Client.pem");
-            client.SupportedCipherSuites.Add(TCipherSuite.TLS_PSK_WITH_AES_128_CCM_8);
-            await client.ConnectToServerWithTimeoutAsync(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 5684), 1000);
-            Console.CancelKeyPress += delegate (object sender, ConsoleCancelEventArgs e)
+            using (var client = new Client(new IPEndPoint(IPAddress.Any, 56239)))
             {
-                e.Cancel = true;
-                exit = true;
-            };
-            Console.WriteLine();
-            Console.WriteLine("Press Ctrl+C to stop the client. Any other characters are send to server");
-            Console.WriteLine();
-            while (!exit)
-            {
-                if (Console.KeyAvailable)
+                client.PSKIdentities.AddIdentity(Encoding.UTF8.GetBytes("oFIrQFrW8EWcZ5u7eGfrkw"), HexToBytes("7CCDE14A5CF3B71C0C08C8B7F9E5"));
+                client.LoadCertificateFromPem(@"Client.pem");
+                client.SupportedCipherSuites.Add(TCipherSuite.TLS_PSK_WITH_AES_128_CCM_8);
+                await client.ConnectToServerWithTimeoutAsync(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 5684), 1000);
+                Console.CancelKeyPress += delegate (object sender, ConsoleCancelEventArgs e)
                 {
-                    var pressedKey = Console.ReadKey(true);
-                    await client.SendWithTimeoutAsync(Encoding.UTF8.GetBytes(pressedKey.KeyChar.ToString()), 1000);
+                    e.Cancel = true;
+                    exit = true;
+                };
+                Console.WriteLine();
+                Console.WriteLine("Press Ctrl+C to stop the client. Any other characters are send to server");
+                Console.WriteLine();
+                while (!exit)
+                {
+                    if (Console.KeyAvailable)
+                    {
+                        var pressedKey = Console.ReadKey(true);
+                        await client.SendWithTimeoutAsync(Encoding.UTF8.GetBytes(pressedKey.KeyChar.ToString()), 1000);
+                    }
                 }
             }
-            await client.StopAsync();
         }
     }
 }
