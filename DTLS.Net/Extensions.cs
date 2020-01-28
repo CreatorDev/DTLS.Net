@@ -29,34 +29,38 @@ namespace DTLS.Net
                 socket.EndReceive
                 );
 
-        public static async Task<TResult> TimeoutAfter<TResult>(this Task<TResult> task, int timeout, string message)
+        public static async Task<TResult> TimeoutAfterAsync<TResult>(this Task<TResult> task, int timeout, string message)
         {
             using (var timeoutCancellationTokenSource = new CancellationTokenSource())
             {
-                var completedTask = await Task.WhenAny(task, Task.Delay(timeout, timeoutCancellationTokenSource.Token)).ConfigureAwait(false);
-                timeoutCancellationTokenSource.Cancel();
-                if (completedTask == task)
+                using (var completedTask = await Task.WhenAny(task, Task.Delay(timeout, timeoutCancellationTokenSource.Token)).ConfigureAwait(false))
                 {
-                    return await task.ConfigureAwait(false);  // Very important in order to propagate exceptions
+                    timeoutCancellationTokenSource.Cancel();
+                    if (completedTask == task)
+                    {
+                        return await task.ConfigureAwait(false);  // Very important in order to propagate exceptions
+                    }
+
+                    throw new OperationCanceledException(message);
                 }
-                
-                throw new OperationCanceledException(message);
             }
         }
 
-        public static async Task TimeoutAfter(this Task task, int timeout, string message)
+        public static async Task TimeoutAfterAsync(this Task task, int timeout, string message)
         {
             using (var timeoutCancellationTokenSource = new CancellationTokenSource())
             {
-                var completedTask = await Task.WhenAny(task, Task.Delay(timeout, timeoutCancellationTokenSource.Token)).ConfigureAwait(false);
-                timeoutCancellationTokenSource.Cancel();
-                if (completedTask == task)
+                using (var completedTask = await Task.WhenAny(task, Task.Delay(timeout, timeoutCancellationTokenSource.Token)).ConfigureAwait(false))
                 {
-                    await task.ConfigureAwait(false);  // Very important in order to propagate exceptions
-                    return;
-                }
+                    timeoutCancellationTokenSource.Cancel();
+                    if (completedTask == task)
+                    {
+                        await task.ConfigureAwait(false);  // Very important in order to propagate exceptions
+                        return;
+                    }
 
-                throw new OperationCanceledException(message);
+                    throw new OperationCanceledException(message);
+                }
             }
         }
 

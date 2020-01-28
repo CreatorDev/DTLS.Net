@@ -37,7 +37,7 @@ namespace DTLS
         public static DateTime UnixEpoch = new DateTime(1970, 1, 1);
 
 		private static readonly byte[] _MASTER_SECRET_LABEL = Encoding.ASCII.GetBytes("master secret");
-        private const int MASTER_SECRET_LENGTH = 48;
+        private const int _MASTERSECRETLENGTH = 48;
 		private static readonly TlsCipherFactory _CipherFactory = new DefaultTlsCipherFactory();   
 
 		public static byte[] CalculateMasterSecret(byte[] preMasterSecret, IKeyExchange keyExchange)
@@ -57,7 +57,7 @@ namespace DTLS
                 .Concat(keyExchange.ServerRandom.Serialise())
                 .ToArray();
 
-			var result = PseudorandomFunction(preMasterSecret, seed, MASTER_SECRET_LENGTH);
+			var result = PseudorandomFunction(preMasterSecret, seed, _MASTERSECRETLENGTH);
 			Array.Clear(preMasterSecret, 0, preMasterSecret.Length);
 			return result;
 		}
@@ -98,7 +98,7 @@ namespace DTLS
             }
 		}
 
-		private static int GetEncryptionAlgorithm(TCipherSuite cipherSuite)
+		private static int _GetEncryptionAlgorithm(TCipherSuite cipherSuite)
 		{
             if (cipherSuite == TCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8)
             {
@@ -133,7 +133,7 @@ namespace DTLS
             return 0;
 		}
 
-		private static int GetMACAlgorithm(TCipherSuite cipherSuite)
+		private static int _GetMACAlgorithm(TCipherSuite cipherSuite)
 		{
             if (cipherSuite == TCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8)
             {
@@ -206,7 +206,7 @@ namespace DTLS
             WriteToConsole(key_block);
 #endif
             return _CipherFactory
-                .CreateCipher(context, GetEncryptionAlgorithm(handshakeInfo.CipherSuite), GetMACAlgorithm(handshakeInfo.CipherSuite));
+                .CreateCipher(context, _GetEncryptionAlgorithm(handshakeInfo.CipherSuite), _GetMACAlgorithm(handshakeInfo.CipherSuite));
         }
 
         public static byte[] CalculateKeyBlock(TlsContext context, int size)

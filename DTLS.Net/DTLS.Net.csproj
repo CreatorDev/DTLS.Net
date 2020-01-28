@@ -17,17 +17,11 @@
     <DelaySign>false</DelaySign>
     <AssemblyOriginatorKeyFile>DTLS.Net.snk</AssemblyOriginatorKeyFile>
     <AssemblyName>DTLS2.Net</AssemblyName>
-    <Version>1.0.13</Version>
+    <Version>1.0.14</Version>
     <PackageReleaseNotes>
-      Made Client Disposable
-      Holding onto instances of the tasks that are fired and forgotten so they don't get GC'd and so that we can cancel them at dispose.
-      In ProcessRecords we're now looping until _ShouldTriggerRecordProccess OR _Terminate
-      Using a separate object to lock modifying the DTLS records list
-      Removed _ShouldTriggerRecordProccess since we're actually awaiting the processing of records now
-      Simplified ProcessRecords function a bit
-      Added the Encrypt Then MAC and Extended Master Secret extensions back in
-      Added .ConfigureAwait(false) to all awaits
-      Using Task.Run in dispose
+Wrapping the completed task in a using to ensure it's disposed properly inside TimeoutAfterAsync - noticing some memory issues and trying to resolve them
+No longer using Task.Run to send the alert in the dispose function since it wasn't actually needed
+Using better naming conventions (anything private is prefaced with "_" and anything async is suffixed with "Async"
     </PackageReleaseNotes>
   </PropertyGroup>
 
