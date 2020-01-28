@@ -21,7 +21,7 @@
     <PackageReleaseNotes>
 Wrapping the completed task in a using to ensure it's disposed properly inside TimeoutAfterAsync - noticing some memory issues and trying to resolve them
 No longer using Task.Run to send the alert in the dispose function since it wasn't actually needed
-Using better naming conventions (anything private is prefaced with "_" and anything async is suffixed with "Async"
+Using better naming conventions (anything private is prefaced with "_" and anything async is suffixed with "Async")
     </PackageReleaseNotes>
   </PropertyGroup>
 
