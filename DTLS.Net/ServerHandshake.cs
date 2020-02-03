@@ -100,7 +100,6 @@ namespace DTLS
             using (var stream = new MemoryStream(data))
             {
                 var handshakeRecord = HandshakeRecord.Deserialise(stream);
-                Console.WriteLine(handshakeRecord.MessageType.ToString());
                 switch (handshakeRecord.MessageType)
                 {
                     case THandshakeType.HelloRequest:
@@ -482,14 +481,6 @@ namespace DTLS
 
                             var handshakeHash = session.Handshake.GetHash(session.Version);
                             var calculatedVerifyData = TLSUtils.GetVerifyData(session.Version, session.Handshake, false, true, handshakeHash);
-#if DEBUG
-                            Console.Write("Handshake Hash:");
-                            TLSUtils.WriteToConsole(handshakeHash);
-                            Console.Write("Sent Verify:");
-                            TLSUtils.WriteToConsole(finished.VerifyData);
-                            Console.Write("Calc Verify:");
-                            TLSUtils.WriteToConsole(calculatedVerifyData);
-#endif
                             if (!finished.VerifyData.SequenceEqual(calculatedVerifyData))
                             {
                                 throw new Exception();

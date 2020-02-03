@@ -177,7 +177,6 @@ namespace DTLS
             using (var stream = new MemoryStream(data))
             {
                 var handshakeRecord = HandshakeRecord.Deserialise(stream);
-                Console.WriteLine(handshakeRecord.MessageType.ToString());
                 switch (handshakeRecord.MessageType)
                 {
                     case THandshakeType.HelloRequest:
@@ -360,12 +359,6 @@ namespace DTLS
                             };
 
                             await this._SendHandshakeMessageWithTimeoutAsync(finished, true).ConfigureAwait(false);
-#if DEBUG
-                            Console.Write("Handshake Hash:");
-                            TLSUtils.WriteToConsole(handshakeHash);
-                            Console.Write("Sent Verify:");
-                            TLSUtils.WriteToConsole(finished.VerifyData);
-#endif
                             break;
                         }
                     case THandshakeType.NewSessionTicket:
@@ -386,14 +379,8 @@ namespace DTLS
                             var serverFinished = Finished.Deserialise(stream);
                             var handshakeHash = this._HandshakeInfo.GetHash(this._Version);
                             var calculatedVerifyData = TLSUtils.GetVerifyData(this._Version, this._HandshakeInfo, true, false, handshakeHash);
-
-                            Console.Write("Recieved Verify:");
-                            TLSUtils.WriteToConsole(serverFinished.VerifyData);
-                            Console.Write("Calc Verify:");
-                            TLSUtils.WriteToConsole(calculatedVerifyData);
                             if (serverFinished.VerifyData.SequenceEqual(calculatedVerifyData))
                             {
-                                Console.WriteLine("Handshake Complete");
                                 this._ConnectionComplete = true;
                             }
                             break;
@@ -418,7 +405,6 @@ namespace DTLS
                     throw new ArgumentNullException(nameof(record));
                 }
 
-                Console.WriteLine(record.RecordType.ToString());
                 switch (record.RecordType)
                 {
                     case TRecordType.ChangeCipherSpec:

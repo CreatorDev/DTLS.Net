@@ -17,11 +17,9 @@
     <DelaySign>false</DelaySign>
     <AssemblyOriginatorKeyFile>DTLS.Net.snk</AssemblyOriginatorKeyFile>
     <AssemblyName>DTLS2.Net</AssemblyName>
-    <Version>1.0.14</Version>
+    <Version>1.0.15</Version>
     <PackageReleaseNotes>
-Wrapping the completed task in a using to ensure it's disposed properly inside TimeoutAfterAsync - noticing some memory issues and trying to resolve them
-No longer using Task.Run to send the alert in the dispose function since it wasn't actually needed
-Using better naming conventions (anything private is prefaced with "_" and anything async is suffixed with "Async")
+      Removing the console writes because they were causing high CPU usage
     </PackageReleaseNotes>
   </PropertyGroup>
 

@@ -193,18 +193,12 @@ namespace DTLS
             handshakeInfo.MasterSecret = TlsUtilities.IsTlsV11(context) ?
                 TlsUtilities.PRF_legacy(preMasterSecret, asciiLabel, seed, 48)
                 : TlsUtilities.PRF(context, preMasterSecret, asciiLabel, seed, 48);
-#if DEBUG
-            Console.Write("MasterSecret :");
-            WriteToConsole(handshakeInfo.MasterSecret);
-#endif
+
             seed = securityParameters.ServerRandom.Concat(securityParameters.ClientRandom).ToArray();
             var key_block = TlsUtilities.IsTlsV11(context) ?
                 TlsUtilities.PRF_legacy(handshakeInfo.MasterSecret, ExporterLabel.key_expansion, seed, 96)
                 : TlsUtilities.PRF(context, handshakeInfo.MasterSecret, ExporterLabel.key_expansion, seed, 96);
-#if DEBUG
-            Console.Write("Key block :");
-            WriteToConsole(key_block);
-#endif
+
             return _CipherFactory
                 .CreateCipher(context, _GetEncryptionAlgorithm(handshakeInfo.CipherSuite), _GetMACAlgorithm(handshakeInfo.CipherSuite));
         }
@@ -354,19 +348,6 @@ namespace DTLS
             }
         }
 #endif
-
-        public static void WriteToConsole(byte[] data)
-        {
-            Console.Write("0x");
-            foreach (var item in data)
-            {
-                var b = ((byte)(item >> 4));
-				Console.Write((char)(b > 9 ? b + 0x37 : b + 0x30));
-                b = ((byte)(item & 0xF));
-				Console.Write((char)(b > 9 ? b + 0x37 : b + 0x30));
-            } 
-            Console.WriteLine();
-        }
 
         public static byte[] GetVerifyData(Version version, HandshakeInfo handshakeInfo, bool client, bool isClientFinished, 
             byte[] handshakeHash)

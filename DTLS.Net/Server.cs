@@ -324,7 +324,6 @@ namespace DTLS
                     throw new ArgumentNullException(nameof(record));
                 }
 
-                Console.WriteLine(record.RecordType.ToString());
                 switch (record.RecordType)
                 {
                     case TRecordType.ChangeCipherSpec:
