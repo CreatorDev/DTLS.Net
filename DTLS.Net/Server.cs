@@ -102,7 +102,7 @@ namespace DTLS
             this.PSKIdentities = new PSKIdentities();
         }
 
-        private void CheckSession(Session session, DTLSRecord record)
+        private void _CheckSession(Session session, DTLSRecord record)
         {
             if(session == null)
             {
@@ -116,15 +116,15 @@ namespace DTLS
 
             if ((session.ClientEpoch == record.Epoch) && (session.ClientSequenceNumber == record.SequenceNumber))
             {
-                ThreadPool.QueueUserWorkItem(this.ProcessRecord, record);
+                ThreadPool.QueueUserWorkItem(this._ProcessRecord, record);
             }
             else if (session.ClientEpoch > record.Epoch)
             {
-                ThreadPool.QueueUserWorkItem(this.ProcessRecord, record);
+                ThreadPool.QueueUserWorkItem(this._ProcessRecord, record);
             }
             else if ((session.ClientEpoch == record.Epoch) && (session.ClientSequenceNumber > record.SequenceNumber))
             {
-                ThreadPool.QueueUserWorkItem(this.ProcessRecord, record);
+                ThreadPool.QueueUserWorkItem(this._ProcessRecord, record);
             }
             else
             {
@@ -142,7 +142,7 @@ namespace DTLS
                 }
                 if (canProcessNow)
                 {
-                    this.CheckSession(session, record);
+                    this._CheckSession(session, record);
                 }
             }
         }
@@ -224,7 +224,7 @@ namespace DTLS
             return null;
         }
 
-        private void ProcessRecord(object state)
+        private void _ProcessRecord(object state)
         {
             if (!(state is DTLSRecord record))
             {
@@ -238,7 +238,7 @@ namespace DTLS
                 session = this._Sessions.GetSession(address);
                 if (session == null)
                 {
-                    this.ProcessRecord(address, session, record);
+                    this._ProcessRecord(address, session, record);
                     session = this._Sessions.GetSession(address);
                     if (session != null)
                     {
@@ -275,7 +275,7 @@ namespace DTLS
 
                 do
                 {
-                    this.ProcessRecord(address, session, record);
+                    this._ProcessRecord(address, session, record);
                     lock (session)
                     {
                         if (record.RecordType != TRecordType.ChangeCipherSpec)
@@ -302,15 +302,15 @@ namespace DTLS
             }
             catch (TlsFatalAlert ex)
             {
-                this.SendAlert(session, TAlertLevel.Fatal, (TAlertDescription)ex.AlertDescription);
+                this._SendAlert(session, TAlertLevel.Fatal, (TAlertDescription)ex.AlertDescription);
             }
             catch
             {
-                this.SendAlert(session,  TAlertLevel.Fatal, TAlertDescription.InternalError);
+                this._SendAlert(session,  TAlertLevel.Fatal, TAlertDescription.InternalError);
             }
         }
 
-        private void ProcessRecord(SocketAddress address, Session session, DTLSRecord record)
+        private void _ProcessRecord(SocketAddress address, Session session, DTLSRecord record)
         {
             try
             {
@@ -371,7 +371,7 @@ namespace DTLS
                             }
                             else if (alertRecord.AlertDescription == TAlertDescription.CloseNotify)
                             {
-                                this.SendAlert(session, TAlertLevel.Warning, TAlertDescription.CloseNotify);
+                                this._SendAlert(session, TAlertLevel.Warning, TAlertDescription.CloseNotify);
                                 this._Sessions.Remove(session, address);
                             }
                             else if (alertRecord.AlertLevel == TAlertLevel.Warning)
@@ -407,11 +407,11 @@ namespace DTLS
             catch (Exception ex)
             {
                 Console.WriteLine(ex.ToString());
-                this.SendAlert(session, TAlertLevel.Fatal, TAlertDescription.InternalError);
+                this._SendAlert(session, TAlertLevel.Fatal, TAlertDescription.InternalError);
             }
         }
 
-         private void ReceiveCallback(object sender, SocketAsyncEventArgs e)
+         private void _ReceiveCallback(object sender, SocketAsyncEventArgs e)
         {
             if(e == null)
             {
@@ -437,11 +437,11 @@ namespace DTLS
                     var session = this._Sessions.GetSession(address);
                     if (session == null)
                     {
-                        ThreadPool.QueueUserWorkItem(this.ProcessRecord, record);
+                        ThreadPool.QueueUserWorkItem(this._ProcessRecord, record);
                     }
                     else
                     {
-                        this.CheckSession(session, record);
+                        this._CheckSession(session, record);
                     }
                 }
 
@@ -455,7 +455,7 @@ namespace DTLS
             }
         }
                
-		private Socket SetupSocket(AddressFamily addressFamily)
+		private Socket _SetupSocket(AddressFamily addressFamily)
 		{
 			var result = new Socket(addressFamily, SocketType.Dgram, ProtocolType.Udp);
             if (addressFamily == AddressFamily.InterNetworkV6)
@@ -531,7 +531,7 @@ namespace DTLS
             }
         }
 
-        private void SendAlert(Session session, TAlertLevel alertLevel, TAlertDescription alertDescription)
+        private void _SendAlert(Session session, TAlertLevel alertLevel, TAlertDescription alertDescription)
         {
             if (session == null)
             {
@@ -584,7 +584,7 @@ namespace DTLS
                 this.SupportedCipherSuites.Add(TCipherSuite.TLS_PSK_WITH_AES_128_CBC_SHA256); //Tested 1.0 1.2
             }
 
-            this._Socket = this.SetupSocket(this.LocalEndPoint.AddressFamily);
+            this._Socket = this._SetupSocket(this.LocalEndPoint.AddressFamily);
             this._Handshake = new ServerHandshake(this._Socket, this.MaxPacketSize, this.PSKIdentities, this.SupportedCipherSuites, this.RequireClientCertificate, ValidatePSK)
             {
                 Certificate = this._Certificate,
@@ -593,10 +593,10 @@ namespace DTLS
             };
 
             this._Socket.Bind(this.LocalEndPoint);
-            this.StartReceive(this._Socket);
+            this._StartReceive(this._Socket);
 		}
 
-        private void StartReceive(Socket socket)
+        private void _StartReceive(Socket socket)
         {
             if(socket == null)
             {
@@ -607,7 +607,7 @@ namespace DTLS
             {
                 RemoteEndPoint = socket.AddressFamily == AddressFamily.InterNetwork ? new IPEndPoint(IPAddress.Any, 0) : new IPEndPoint(IPAddress.IPv6Any, 0)
             };
-            parameters.Completed += new EventHandler<SocketAsyncEventArgs>(this.ReceiveCallback);
+            parameters.Completed += new EventHandler<SocketAsyncEventArgs>(this._ReceiveCallback);
             parameters.SetBuffer(new byte[4096], 0, 4096);
             socket.ReceiveFromAsync(parameters);
         }

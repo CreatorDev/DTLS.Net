@@ -13,23 +13,46 @@ namespace DTLS.Net
     public static class Extensions
     {
 #if NET452 || NET47
-        public static Task ConnectAsync(this Socket socket, EndPoint endpoint) =>
-            Task.Factory.FromAsync(socket.BeginConnect, socket.EndConnect, endpoint, null);
+        public static async Task ConnectAsync(this Socket socket, EndPoint endpoint) =>
+            await Task.Factory.FromAsync(socket.BeginConnect, socket.EndConnect, endpoint, null);
 #endif
 
-        public static Task<int> SendAsAsync(this Socket socket, byte[] buffer) =>
-            Task.Factory.FromAsync(
+        public static async Task<int> SendAsync(this Socket socket, byte[] buffer, TimeSpan timeout)
+        {
+            var timeoutMs = (int)timeout.TotalMilliseconds;
+#if NETSTANDARD2_1
+            using (var cts = new CancellationTokenSource())
+            {
+                cts.CancelAfter(timeoutMs);
+                return await socket.SendAsync(buffer, SocketFlags.None, cts.Token).ConfigureAwait(false);
+            }
+#else
+            return await Task.Factory.FromAsync(
                 socket.BeginSend(buffer, 0, buffer.Length, SocketFlags.None, null, socket),
                 socket.EndReceive
-                );
+                ).TimeoutAfterAsync(timeoutMs);
+#endif
+        }
 
-        public static Task<int> ReceiveAsAsync(this Socket socket, byte[] buffer) =>
-            Task.Factory.FromAsync(
+        public static async Task<int> ReceiveAsync(this Socket socket, byte[] buffer, TimeSpan timeout)
+        {
+            var timeoutMs = (int)timeout.TotalMilliseconds;
+#if NETSTANDARD2_1
+            using (var cts = new CancellationTokenSource())
+            {
+                cts.CancelAfter(timeoutMs);
+                return await socket.ReceiveAsync(buffer, SocketFlags.None, cts.Token).ConfigureAwait(false);
+            }
+#else
+            return await Task.Factory.FromAsync(
                 socket.BeginReceive(buffer, 0, buffer.Length, SocketFlags.None, null, socket),
                 socket.EndReceive
-                );
+                ).TimeoutAfterAsync(timeoutMs);
+#endif
+        }
 
-        public static async Task<TResult> TimeoutAfterAsync<TResult>(this Task<TResult> task, int timeout, string message)
+#if !NETSTANDARD2_1
+        public static async Task<TResult> TimeoutAfterAsync<TResult>(this Task<TResult> task, int timeout)
         {
             using (var timeoutCancellationTokenSource = new CancellationTokenSource())
             {
@@ -41,28 +64,11 @@ namespace DTLS.Net
                         return await task.ConfigureAwait(false);  // Very important in order to propagate exceptions
                     }
 
-                    throw new OperationCanceledException(message);
+                    throw new TimeoutException();
                 }
             }
         }
-
-        public static async Task TimeoutAfterAsync(this Task task, int timeout, string message)
-        {
-            using (var timeoutCancellationTokenSource = new CancellationTokenSource())
-            {
-                using (var completedTask = await Task.WhenAny(task, Task.Delay(timeout, timeoutCancellationTokenSource.Token)).ConfigureAwait(false))
-                {
-                    timeoutCancellationTokenSource.Cancel();
-                    if (completedTask == task)
-                    {
-                        await task.ConfigureAwait(false);  // Very important in order to propagate exceptions
-                        return;
-                    }
-
-                    throw new OperationCanceledException(message);
-                }
-            }
-        }
+#endif
 
         public static IEnumerable<IEnumerable<T>> ChunkBySize<T>(this IEnumerable<T> source, int size)
         {
