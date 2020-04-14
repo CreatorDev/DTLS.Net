@@ -406,7 +406,12 @@ namespace DTLS
                         remoteEndPoint = new IPEndPoint(IPAddress.IPv6Any, 0);
                     e.RemoteEndPoint = remoteEndPoint;
                     e.SetBuffer(0, 4096);
-                    socket.ReceiveFromAsync(e);
+                    bool pending = socket.ReceiveFromAsync(e);
+                    if (!pending)
+                    {
+                        // If ReceiveFromAsync returns false, the callback will not be triggered automatically so we must call it ourselves.
+                        ReceiveCallback(sender, e);
+                    }
                 }
             }
 		}
