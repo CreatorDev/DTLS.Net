@@ -42,14 +42,15 @@ namespace DTLS
 {
     public class Client : IDisposable
     {
-        private const int _MAXPACKETSIZE = 1440;
-
         private static readonly Version _SupportedVersion = DTLSRecord.Version1_2;
         private readonly HandshakeInfo _HandshakeInfo = new HandshakeInfo();
         private readonly DTLSRecords _Records = new DTLSRecords();
         private readonly List<byte[]> _FragmentedRecordList = new List<byte[]>();
         private readonly CancellationTokenSource _Cts = new CancellationTokenSource();
 
+        //The maximum safe UDP payload is 508 bytes. Except on an IPv6-only route, where the maximum payload is 1,212 bytes.
+        //https://stackoverflow.com/questions/1098897/what-is-the-largest-safe-udp-packet-size-on-the-internet#:~:text=The%20maximum%20safe%20UDP%20payload%20is%20508%20bytes.&text=Except%20on%20an%20IPv6%2Donly,bytes%20may%20be%20preferred%20instead.
+        private static int _MaxPacketSize = 1212;
         private Task _ReceiveTask;
         private Task _ProcessRecordTask;
         private Action<EndPoint, byte[]> _DataReceivedFunction;
@@ -92,7 +93,14 @@ namespace DTLS
 #endif
 
         public Client(EndPoint localEndPoint)
-            : this(localEndPoint, new List<TCipherSuite>()) => this.SupportedCipherSuites = new List<TCipherSuite>();
+            : this(localEndPoint, new List<TCipherSuite>())
+        {
+            this.SupportedCipherSuites = new List<TCipherSuite>();
+            if(localEndPoint.AddressFamily != AddressFamily.InterNetworkV6)
+            {
+                _MaxPacketSize = 508;
+            }
+        }
 
         public Client(EndPoint localEndPoint, List<TCipherSuite> supportedCipherSuites)
         {
@@ -716,7 +724,7 @@ namespace DTLS
             return response;
         }
 
-        private byte[] _GetBytes(IHandshakeMessage handshakeMessage, bool encrypt)
+        private IEnumerable<byte[]> _GetBytes(IHandshakeMessage handshakeMessage, bool encrypt)
         {
             if(handshakeMessage == null)
             {
@@ -724,11 +732,11 @@ namespace DTLS
             }
 
             var size = handshakeMessage.CalculateSize(this._Version);
-            var maxPayloadSize = _MAXPACKETSIZE - DTLSRecord.RECORD_OVERHEAD + HandshakeRecord.RECORD_OVERHEAD;
+            var maxPayloadSize = _MaxPacketSize - DTLSRecord.RECORD_OVERHEAD + HandshakeRecord.RECORD_OVERHEAD;
 
             if (size > maxPayloadSize)
             {
-                var wholeMessage = new byte[0];
+                var wholeMessage = new List<byte[]>();
 
                 var record = new DTLSRecord
                 {
@@ -794,7 +802,7 @@ namespace DTLS
                         record.Serialise(stream);
                     }
 
-                    wholeMessage = wholeMessage.Concat(response).ToArray();
+                    wholeMessage.Add(response);
                     handshakeRecord.FragmentOffset += (uint)x.Count();
                 });
 
@@ -846,7 +854,7 @@ namespace DTLS
                     record.Serialise(stream);
                 }
 
-                return response;
+                return new List<byte[]>() { response };
             }
         }
 
@@ -911,8 +919,12 @@ namespace DTLS
                 throw new Exception("Socket Cannot be Null");
             }
 
-            var bytes = this._GetBytes(handshakeMessage, encrypt);
-            await this._Socket.SendAsync(bytes, timeout).ConfigureAwait(false);
+            var byteArrayList = this._GetBytes(handshakeMessage, encrypt);
+            foreach (var byteArray in byteArrayList)
+            {
+                Console.WriteLine($"Sending {handshakeMessage.MessageType} {byteArray.Count()}");
+                await this._Socket.SendAsync(byteArray, timeout).ConfigureAwait(false);
+            }
         }
 
         public async Task ConnectToServerAsync(EndPoint serverEndPoint)

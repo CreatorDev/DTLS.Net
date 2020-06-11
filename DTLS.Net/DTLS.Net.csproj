@@ -17,14 +17,10 @@
     <DelaySign>false</DelaySign>
     <AssemblyOriginatorKeyFile>DTLS.Net.snk</AssemblyOriginatorKeyFile>
     <AssemblyName>DTLS2.Net</AssemblyName>
-    <Version>1.0.16</Version>
+    <Version>1.0.17</Version>
     <PackageReleaseNotes>
-BREAKING CHANGES
-Removed "WithTimeout" from any function names since all of them do have timeouts now.
-For NETSTANDARD2_1, we're using proper cancellation methods to send and receive. Still using TimeoutAfterAsync for other frameworks (these could have CPU problems)
-Using a time based timeout for ReceiveDataAsync and ConnectToServerAsync
-Changed all timeouts to TimeSpans so there's no confusion on seconds vs milliseconds or anything else
-Changed the OperationTimeout in TimeoutAfterAsync to a TimeoutException
+      Changed the max packet size to work better with standards. For IPv4 max is 508 and for IPv6 max is 1212
+      Sending the fragments separately to avoid "Packet too big" failures
     </PackageReleaseNotes>
   </PropertyGroup>
 
