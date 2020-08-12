@@ -14,7 +14,7 @@ namespace DTLS.Net
     {
 #if NET452 || NET47
         public static async Task ConnectAsync(this Socket socket, EndPoint endpoint) =>
-            await Task.Factory.FromAsync(socket.BeginConnect, socket.EndConnect, endpoint, null);
+            await Task.Factory.FromAsync(socket.BeginConnect, socket.EndConnect, endpoint, null).ConfigureAwait(false);
 #endif
 
         public static async Task<int> SendAsync(this Socket socket, byte[] buffer, TimeSpan timeout)
@@ -30,7 +30,8 @@ namespace DTLS.Net
             return await Task.Factory.FromAsync(
                 socket.BeginSend(buffer, 0, buffer.Length, SocketFlags.None, null, socket),
                 socket.EndReceive
-                ).TimeoutAfterAsync(timeoutMs);
+                ).TimeoutAfterAsync(timeoutMs)
+                .ConfigureAwait(false);
 #endif
         }
 
@@ -47,7 +48,8 @@ namespace DTLS.Net
             return await Task.Factory.FromAsync(
                 socket.BeginReceive(buffer, 0, buffer.Length, SocketFlags.None, null, socket),
                 socket.EndReceive
-                ).TimeoutAfterAsync(timeoutMs);
+                ).TimeoutAfterAsync(timeoutMs)
+                .ConfigureAwait(false);
 #endif
         }
 
