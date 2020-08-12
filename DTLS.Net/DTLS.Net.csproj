@@ -17,10 +17,9 @@
     <DelaySign>false</DelaySign>
     <AssemblyOriginatorKeyFile>DTLS.Net.snk</AssemblyOriginatorKeyFile>
     <AssemblyName>DTLS2.Net</AssemblyName>
-    <Version>1.0.17</Version>
+    <Version>1.0.18</Version>
     <PackageReleaseNotes>
-      Changed the max packet size to work better with standards. For IPv4 max is 508 and for IPv6 max is 1212
-      Sending the fragments separately to avoid "Packet too big" failures
+      Added missing .ConfigureAwait(false)
     </PackageReleaseNotes>
   </PropertyGroup>
 
