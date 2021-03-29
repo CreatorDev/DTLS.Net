@@ -52,7 +52,9 @@ namespace DTLS
 
         public EndPoint LocalEndPoint { get; }
 
-        public int MaxPacketSize { get; set; } = 1440;
+        //The maximum safe UDP payload is 508 bytes. Except on an IPv6-only route, where the maximum payload is 1,212 bytes.
+        //https://stackoverflow.com/questions/1098897/what-is-the-largest-safe-udp-packet-size-on-the-internet#:~:text=The%20maximum%20safe%20UDP%20payload%20is%20508%20bytes.&text=Except%20on%20an%20IPv6%2Donly,bytes%20may%20be%20preferred%20instead.
+        public int MaxPacketSize { get; set; } = 1212;
 
         public PSKIdentities PSKIdentities { get; set; }
 
@@ -89,6 +91,11 @@ namespace DTLS
         public Server(EndPoint localEndPoint)
 		{
             this.LocalEndPoint = localEndPoint ?? throw new ArgumentNullException(nameof(localEndPoint));
+            if (this.LocalEndPoint.AddressFamily != AddressFamily.InterNetworkV6)
+            {
+                MaxPacketSize = 508;
+            }
+
             this._Sessions = new Sessions();
             this.PSKIdentities = new PSKIdentities();
             this.SupportedCipherSuites = new List<TCipherSuite>();

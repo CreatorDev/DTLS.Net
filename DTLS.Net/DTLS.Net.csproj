@@ -17,9 +17,9 @@
     <DelaySign>false</DelaySign>
     <AssemblyOriginatorKeyFile>DTLS.Net.snk</AssemblyOriginatorKeyFile>
     <AssemblyName>DTLS2.Net</AssemblyName>
-    <Version>1.1.1</Version>
+    <Version>1.1.2</Version>
     <PackageReleaseNotes>
-      Updated author name and repo url
+      Updated Server to use the proper "safe" MTU size
     </PackageReleaseNotes>
   </PropertyGroup>
 
