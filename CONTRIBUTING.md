@@ -1,8 +1,3 @@
-
-![](doc/img.png)
-
-----
-
 # DTLS.Net contributor guide.
 
 
@@ -10,7 +5,7 @@
 
 If you discover a bug, or find an issue or area that you feel needs improvement:
 
-* Navigate to the "Issues" tab on the project Github page https://github.com/CreatorDev/DTLS.Net/issues  
+* Navigate to the "Issues" tab on the project Github page https://github.com/kmiller77/DTLS.Net/issues
 * Click the "New Issue" button.  
 
 
@@ -83,7 +78,7 @@ Use the same email address that you used to sign up for your github account.
 ### Forking the repository.
 
 If you want to contribute to the project the best practice is to create a fork. To do so
-navigate to *https://github.com/CreatorDev/DTLS.Net* and click on the *fork* button at the top right of the 
+navigate to https://github.com/kmiller77/DTLS.Net and click on the *fork* button at the top right of the 
 screen. If you are a member of multiple organisations you will be presented with a selection screen
 which can be used to select where to create the fork. Click on your user account to create the fork.
 
@@ -129,9 +124,6 @@ $ git checkout master -b dev-branch1 --track
 
 Once you have created your branch make your changes, then commit them to your new branch.
 
-### Coding style.
-
-The DTLS.Net coding style guidelines can be found in the [coding style guide](doc/coding_style.md).
 
 ### Commit messages.
 

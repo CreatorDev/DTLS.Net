@@ -1,7 +1,3 @@
-![Imagination Technologies Limited logo](doc/img.png)
-
-----
-
 ## DTLS.Net
 
 [![License (3-Clause BSD)](https://img.shields.io/badge/license-BSD%203--Clause-blue.svg?style=flat-square)](http://opensource.org/licenses/BSD-3-Clause)
@@ -14,13 +10,19 @@ DTLS.Net was developed for use in an [implementation](https://github.com/Creator
 * TLS_PSK_WITH_AES_128_CCM_8
 * TLS_PSK_WITH_AES_128_CBC_SHA256
 
+
+DTLS2.Net was developed for use with Net-SNMP and an RSA certificate from the Windows Certificate Store and adds a new CipherSuite on the client side
+
+* TLS_RSA_WITH_AES_256_CBC_SHA
+
 ### Limitations
 
 Since the client is only required to serve for the above project it has several inherent limitations:
 
 1. No automatic retransmission
-2. No support for fragmentation of handshake packets
+2. No reordering of messages or fragments
 3. Does not verify Server Certificates (against CA)
+4. No resumption when using the New Session Ticket Extention
 
 The server currently also has the following limitations:
 
