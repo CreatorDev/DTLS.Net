@@ -17,9 +17,9 @@
     <DelaySign>false</DelaySign>
     <AssemblyOriginatorKeyFile>DTLS.Net.snk</AssemblyOriginatorKeyFile>
     <AssemblyName>DTLS2.Net</AssemblyName>
-    <Version>1.1.2</Version>
+    <Version>1.1.3</Version>
     <PackageReleaseNotes>
-      Updated Server to use the proper "safe" MTU size
+      Added the ability for a Client to use more than 2 certificates in a chain
     </PackageReleaseNotes>
   </PropertyGroup>
 

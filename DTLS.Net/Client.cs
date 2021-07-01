@@ -986,9 +986,15 @@ namespace DTLS
             this.PublicKey = (RSACryptoServiceProvider)mainCert.PublicKey.Key;
 #endif
 
+            var certChain = new List<byte[]>();
+            foreach(var element in chain.ChainElements)
+            {
+                certChain.Add(element.Certificate.GetRawCertData());
+            }
+
             this._Certificate = new Certificate
             {
-                CertChain = new List<byte[]>() { mainCert.GetRawCertData(), chain.ChainElements[1].Certificate.GetRawCertData() },
+                CertChain = certChain,
                 CertificateType = TCertificateType.X509
             };
         }
