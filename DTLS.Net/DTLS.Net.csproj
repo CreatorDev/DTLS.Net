@@ -8,8 +8,8 @@
     <Product>DTLS2.Net</Product>
     <Description>Library for a DTLS Client and Server Implementation. Not all features are supported. This package was built on top of CreatorDev's DTLS.Net - https://github.com/CreatorDev/DTLS.Net</Description>
     <PackageTags>DTLS, RSA, PSK, X509Certificate2</PackageTags>
-    <PackageProjectUrl>https://github.com/kdurkin77/DTLS.Net</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/kdurkin77/DTLS.Net</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/kdurkin77/DTLS2.Net</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/kdurkin77/DTLS2.Net</RepositoryUrl>
     <RepositoryType>GitHub</RepositoryType>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <Title>DTLS2.Net</Title>
