@@ -1052,7 +1052,7 @@ namespace DTLS
                 if (available > 0)
                 {
 #if NET6_0_OR_GREATER
-                    var buffer = new Memory<byte>();
+                    var buffer = new Memory<byte>(new byte[available]);
                     var ct = new CancellationTokenSource(timeout).Token;
                     var recvd = await socket.ReceiveAsync(buffer, SocketFlags.None, ct).ConfigureAwait(false);
                     if (recvd < available)
