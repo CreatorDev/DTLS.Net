@@ -29,6 +29,7 @@ namespace DTLS.Net.Util
             out int cbResult,
             NCryptSignFlags dwFlags);
 
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Interoperability", "CA1416:Validate platform compatibility", Justification = "The RSA items are windows only, however we want to allow for the other types of encryption to be use in other platforms")]
         internal static byte[] SignHashRaw(CngKey key, byte[] hash, int keySize)
         {
             var keySizeBytes = keySize / 8;

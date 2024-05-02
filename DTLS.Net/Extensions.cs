@@ -12,11 +12,6 @@ namespace DTLS.Net
 {
     public static class Extensions
     {
-#if NET452 || NET47
-        public static async Task ConnectAsync(this Socket socket, EndPoint endpoint) =>
-            await Task.Factory.FromAsync(socket.BeginConnect, socket.EndConnect, endpoint, null).ConfigureAwait(false);
-#endif
-
         public static async Task<int> SendAsync(this Socket socket, byte[] buffer, TimeSpan timeout)
         {
             var timeoutMs = (int)timeout.TotalMilliseconds;

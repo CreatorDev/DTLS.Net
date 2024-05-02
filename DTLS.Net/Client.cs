@@ -41,17 +41,22 @@ using System.Threading.Tasks;
 namespace DTLS
 {
     public class Client : IDisposable
+#if NET6_0_OR_GREATER
+        , IAsyncDisposable
+#endif
     {
         private static readonly Version _SupportedVersion = DTLSRecord.Version1_2;
-        private readonly HandshakeInfo _HandshakeInfo = new HandshakeInfo();
-        private readonly DTLSRecords _Records = new DTLSRecords();
-        private readonly List<byte[]> _FragmentedRecordList = new List<byte[]>();
-        private readonly CancellationTokenSource _Cts = new CancellationTokenSource();
+        private readonly HandshakeInfo _HandshakeInfo = new();
+        private readonly DTLSRecords _Records = new();
+        private readonly List<byte[]> _FragmentedRecordList = [];
+        private readonly CancellationTokenSource _Cts = new();
 
         //The maximum safe UDP payload is 508 bytes. Except on an IPv6-only route, where the maximum payload is 1,212 bytes.
         //https://stackoverflow.com/questions/1098897/what-is-the-largest-safe-udp-packet-size-on-the-internet#:~:text=The%20maximum%20safe%20UDP%20payload%20is%20508%20bytes.&text=Except%20on%20an%20IPv6%2Donly,bytes%20may%20be%20preferred%20instead.
         private static int _MaxPacketSize = 1212;
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("CodeQuality", "IDE0052:Remove unread private members", Justification = "Need to hold onto the task so it's not GC'd")]
         private Task _ReceiveTask;
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("CodeQuality", "IDE0052:Remove unread private members", Justification = "Need to hold onto the task so it's not GC'd")]
         private Task _ProcessRecordTask;
         private Action<EndPoint, byte[]> _DataReceivedFunction;
         private Socket _Socket;
@@ -70,12 +75,12 @@ namespace DTLS
         private AsymmetricKeyParameter _PrivateKey;
         private PSKIdentity _PSKIdentity;
 
-        private byte[] _ReceivedData = new byte[0];
-        private byte[] _RecvDataBuffer = new byte[0];
+        private byte[] _ReceivedData = [];
+        private byte[] _RecvDataBuffer = [];
         private bool _IsFragment = false;
         private bool _ConnectionComplete = false;
         private bool _Disposed = false;
-        private long _SequenceNumber = -1; //realy only 48 bit
+        private long _SequenceNumber = -1; //really only 48 bit
 
         public EndPoint LocalEndPoint { get; }
 
@@ -93,10 +98,10 @@ namespace DTLS
 #endif
 
         public Client(EndPoint localEndPoint)
-            : this(localEndPoint, new List<TCipherSuite>())
+            : this(localEndPoint, [])
         {
-            this.SupportedCipherSuites = new List<TCipherSuite>();
-            if(localEndPoint.AddressFamily != AddressFamily.InterNetworkV6)
+            SupportedCipherSuites = [];
+            if (localEndPoint.AddressFamily != AddressFamily.InterNetworkV6)
             {
                 _MaxPacketSize = 508;
             }
@@ -104,63 +109,63 @@ namespace DTLS
 
         public Client(EndPoint localEndPoint, List<TCipherSuite> supportedCipherSuites)
         {
-            this.LocalEndPoint = localEndPoint ?? throw new ArgumentNullException(nameof(localEndPoint));
-            this.SupportedCipherSuites = supportedCipherSuites ?? throw new ArgumentNullException(nameof(supportedCipherSuites));
-            this.PSKIdentities = new PSKIdentities();
-            this._HandshakeInfo.ClientRandom = new RandomData();
-            this._HandshakeInfo.ClientRandom.Generate();
-        }
-        
-        private void _ChangeEpoch()
-        {
-            ++this._Epoch;
-            this._SequenceNumber = -1;
+            LocalEndPoint = localEndPoint ?? throw new ArgumentNullException(nameof(localEndPoint));
+            SupportedCipherSuites = supportedCipherSuites ?? throw new ArgumentNullException(nameof(supportedCipherSuites));
+            PSKIdentities = new PSKIdentities();
+            _HandshakeInfo.ClientRandom = new RandomData();
+            _HandshakeInfo.ClientRandom.Generate();
         }
 
-        private long _NextSequenceNumber() => ++this._SequenceNumber;
-
-        private async Task _ProcessHandshakeAsync(DTLSRecord record)
+        private void ChangeEpoch()
         {
-            if(record == null)
+            ++_Epoch;
+            _SequenceNumber = -1;
+        }
+
+        private long NextSequenceNumber() => ++_SequenceNumber;
+
+        private async Task ProcessHandshakeAsync(DTLSRecord record)
+        {
+            if (record == null)
             {
                 throw new ArgumentNullException(nameof(record));
             }
 
             var data = record.Fragment;
-            if (this._EncyptedServerEpoch == record.Epoch)
+            if (_EncyptedServerEpoch == record.Epoch)
             {
                 var count = 0;
-                while ((this._Cipher == null) && (count < 500))
+                while ((_Cipher == null) && (count < 500))
                 {
                     await Task.Delay(10).ConfigureAwait(false);
                     count++;
                 }
 
-                if (this._Cipher == null)
+                if (_Cipher == null)
                 {
                     throw new Exception("Need Cipher for Encrypted Session");
                 }
-                
+
                 var sequenceNumber = ((long)record.Epoch << 48) + record.SequenceNumber;
-                data = this._Cipher.DecodeCiphertext(sequenceNumber, (byte)TRecordType.Handshake, record.Fragment, 0, record.Fragment.Length);
+                data = _Cipher.DecodeCiphertext(sequenceNumber, (byte)TRecordType.Handshake, record.Fragment, 0, record.Fragment.Length);
             }
-            
+
             using (var tempStream = new MemoryStream(data))
             {
                 var handshakeRec = HandshakeRecord.Deserialise(tempStream);
                 if (handshakeRec.Length > (handshakeRec.FragmentLength + handshakeRec.FragmentOffset))
                 {
-                    this._IsFragment = true;
-                    this._FragmentedRecordList.Add(data);
+                    _IsFragment = true;
+                    _FragmentedRecordList.Add(data);
                     return;
                 }
-                else if (this._IsFragment)
+                else if (_IsFragment)
                 {
-                    this._FragmentedRecordList.Add(data);
-                    data = new byte[0];
-                    foreach (var rec in this._FragmentedRecordList)
+                    _FragmentedRecordList.Add(data);
+                    data = [];
+                    foreach (var rec in _FragmentedRecordList)
                     {
-                        data = data.Concat(rec.Skip(HandshakeRecord.RECORD_OVERHEAD)).ToArray();
+                        data = [.. data, .. rec.Skip(HandshakeRecord.RECORD_OVERHEAD)];
                     }
 
                     var tempHandshakeRec = new HandshakeRecord()
@@ -178,7 +183,7 @@ namespace DTLS
                         tempHandshakeRec.Serialise(updateStream);
                     }
 
-                    data = tempHandshakeBytes.Concat(data).ToArray();
+                    data = [.. tempHandshakeBytes, .. data];
                 }
             }
 
@@ -198,47 +203,47 @@ namespace DTLS
                     case THandshakeType.ServerHello:
                         {
                             var serverHello = ServerHello.Deserialise(stream);
-                            this._HandshakeInfo.UpdateHandshakeHash(data);
-                            this._ServerEpoch = record.Epoch;
-                            this._HandshakeInfo.CipherSuite = (TCipherSuite)serverHello.CipherSuite;
-                            this._HandshakeInfo.ServerRandom = serverHello.Random;
-                            this._Version = serverHello.ServerVersion <= this._Version ? serverHello.ServerVersion : _SupportedVersion;
+                            _HandshakeInfo.UpdateHandshakeHash(data);
+                            _ServerEpoch = record.Epoch;
+                            _HandshakeInfo.CipherSuite = (TCipherSuite)serverHello.CipherSuite;
+                            _HandshakeInfo.ServerRandom = serverHello.Random;
+                            _Version = serverHello.ServerVersion <= _Version ? serverHello.ServerVersion : _SupportedVersion;
                             break;
                         }
                     case THandshakeType.HelloVerifyRequest:
                         {
                             var helloVerifyRequest = HelloVerifyRequest.Deserialise(stream);
-                            this._Version = helloVerifyRequest.ServerVersion;
-                            await this._SendHelloAsync(helloVerifyRequest.Cookie).ConfigureAwait(false);
+                            _Version = helloVerifyRequest.ServerVersion;
+                            await SendHelloAsync(helloVerifyRequest.Cookie).ConfigureAwait(false);
                             break;
                         }
                     case THandshakeType.Certificate:
                         {
                             var cert = Certificate.Deserialise(stream, TCertificateType.X509);
-                            this._HandshakeInfo.UpdateHandshakeHash(data);
-                            this.ServerCertificate = cert.Cert;
+                            _HandshakeInfo.UpdateHandshakeHash(data);
+                            ServerCertificate = cert.Cert;
                             break;
                         }
                     case THandshakeType.ServerKeyExchange:
                         {
-                            this._HandshakeInfo.UpdateHandshakeHash(data);
-                            var keyExchangeAlgorithm = CipherSuites.GetKeyExchangeAlgorithm(this._HandshakeInfo.CipherSuite);
+                            _HandshakeInfo.UpdateHandshakeHash(data);
+                            var keyExchangeAlgorithm = CipherSuites.GetKeyExchangeAlgorithm(_HandshakeInfo.CipherSuite);
                             byte[] preMasterSecret = null;
                             IKeyExchange keyExchange = null;
                             if (keyExchangeAlgorithm == TKeyExchangeAlgorithm.ECDHE_ECDSA)
                             {
-                                var serverKeyExchange = ECDHEServerKeyExchange.Deserialise(stream, this._Version);
+                                var serverKeyExchange = ECDHEServerKeyExchange.Deserialise(stream, _Version);
                                 var keyExchangeECDHE = new ECDHEKeyExchange
                                 {
-                                    CipherSuite = this._HandshakeInfo.CipherSuite,
+                                    CipherSuite = _HandshakeInfo.CipherSuite,
                                     Curve = serverKeyExchange.EllipticCurve,
                                     KeyExchangeAlgorithm = keyExchangeAlgorithm,
-                                    ClientRandom = this._HandshakeInfo.ClientRandom,
-                                    ServerRandom = this._HandshakeInfo.ServerRandom
+                                    ClientRandom = _HandshakeInfo.ClientRandom,
+                                    ServerRandom = _HandshakeInfo.ServerRandom
                                 };
                                 keyExchangeECDHE.GenerateEphemeralKey();
                                 var clientKeyExchange = new ECDHEClientKeyExchange(keyExchangeECDHE.PublicKey);
-                                this._ClientKeyExchange = clientKeyExchange;
+                                _ClientKeyExchange = clientKeyExchange;
                                 preMasterSecret = keyExchangeECDHE.GetPreMasterSecret(serverKeyExchange.PublicKeyBytes);
                                 keyExchange = keyExchangeECDHE;
                             }
@@ -247,31 +252,28 @@ namespace DTLS
                                 var serverKeyExchange = ECDHEPSKServerKeyExchange.Deserialise(stream);
                                 var keyExchangeECDHE = new ECDHEKeyExchange
                                 {
-                                    CipherSuite = this._HandshakeInfo.CipherSuite,
+                                    CipherSuite = _HandshakeInfo.CipherSuite,
                                     Curve = serverKeyExchange.EllipticCurve,
                                     KeyExchangeAlgorithm = keyExchangeAlgorithm,
-                                    ClientRandom = this._HandshakeInfo.ClientRandom,
-                                    ServerRandom = this._HandshakeInfo.ServerRandom
+                                    ClientRandom = _HandshakeInfo.ClientRandom,
+                                    ServerRandom = _HandshakeInfo.ServerRandom
                                 };
                                 keyExchangeECDHE.GenerateEphemeralKey();
                                 var clientKeyExchange = new ECDHEPSKClientKeyExchange(keyExchangeECDHE.PublicKey);
                                 if (serverKeyExchange.PSKIdentityHint != null)
                                 {
-                                    var key = this.PSKIdentities.GetKey(serverKeyExchange.PSKIdentityHint);
+                                    var key = PSKIdentities.GetKey(serverKeyExchange.PSKIdentityHint);
                                     if (key != null)
                                     {
-                                        this._PSKIdentity = new PSKIdentity() { Identity = serverKeyExchange.PSKIdentityHint, Key = key };
+                                        _PSKIdentity = new PSKIdentity() { Identity = serverKeyExchange.PSKIdentityHint, Key = key };
                                     }
                                 }
-                                if (this._PSKIdentity == null)
-                                {
-                                    this._PSKIdentity = this.PSKIdentities.GetRandom();
-                                }
+                                _PSKIdentity ??= PSKIdentities.GetRandom();
 
-                                clientKeyExchange.PSKIdentity = this._PSKIdentity.Identity;
-                                this._ClientKeyExchange = clientKeyExchange;
+                                clientKeyExchange.PSKIdentity = _PSKIdentity.Identity;
+                                _ClientKeyExchange = clientKeyExchange;
                                 var otherSecret = keyExchangeECDHE.GetPreMasterSecret(serverKeyExchange.PublicKeyBytes);
-                                preMasterSecret = TLSUtils.GetPSKPreMasterSecret(otherSecret, this._PSKIdentity.Key);
+                                preMasterSecret = TLSUtils.GetPSKPreMasterSecret(otherSecret, _PSKIdentity.Key);
                                 keyExchange = keyExchangeECDHE;
                             }
                             else if (keyExchangeAlgorithm == TKeyExchangeAlgorithm.PSK)
@@ -280,54 +282,51 @@ namespace DTLS
                                 var clientKeyExchange = new PSKClientKeyExchange();
                                 if (serverKeyExchange.PSKIdentityHint != null)
                                 {
-                                    var key = this.PSKIdentities.GetKey(serverKeyExchange.PSKIdentityHint);
+                                    var key = PSKIdentities.GetKey(serverKeyExchange.PSKIdentityHint);
                                     if (key != null)
                                     {
-                                        this._PSKIdentity = new PSKIdentity() { Identity = serverKeyExchange.PSKIdentityHint, Key = key };
+                                        _PSKIdentity = new PSKIdentity() { Identity = serverKeyExchange.PSKIdentityHint, Key = key };
                                     }
                                 }
-                                if (this._PSKIdentity == null)
-                                {
-                                    this._PSKIdentity = this.PSKIdentities.GetRandom();
-                                }
+                                _PSKIdentity ??= PSKIdentities.GetRandom();
 
-                                var otherSecret = new byte[this._PSKIdentity.Key.Length];
-                                clientKeyExchange.PSKIdentity = this._PSKIdentity.Identity;
-                                this._ClientKeyExchange = clientKeyExchange;
-                                preMasterSecret = TLSUtils.GetPSKPreMasterSecret(otherSecret, this._PSKIdentity.Key);
+                                var otherSecret = new byte[_PSKIdentity.Key.Length];
+                                clientKeyExchange.PSKIdentity = _PSKIdentity.Identity;
+                                _ClientKeyExchange = clientKeyExchange;
+                                preMasterSecret = TLSUtils.GetPSKPreMasterSecret(otherSecret, _PSKIdentity.Key);
                             }
-                            this._Cipher = TLSUtils.AssignCipher(preMasterSecret, true, this._Version, this._HandshakeInfo);
+                            _Cipher = TLSUtils.AssignCipher(preMasterSecret, true, _Version, _HandshakeInfo);
                             break;
                         }
                     case THandshakeType.CertificateRequest:
                         {
-                            this._HandshakeInfo.UpdateHandshakeHash(data);
-                            this._SendCertificate = true;
+                            _HandshakeInfo.UpdateHandshakeHash(data);
+                            _SendCertificate = true;
                             break;
                         }
                     case THandshakeType.ServerHelloDone:
                         {
-                            this._HandshakeInfo.UpdateHandshakeHash(data);
-                            var keyExchangeAlgorithm = CipherSuites.GetKeyExchangeAlgorithm(this._HandshakeInfo.CipherSuite);
-                            if (this._Cipher == null)
+                            _HandshakeInfo.UpdateHandshakeHash(data);
+                            var keyExchangeAlgorithm = CipherSuites.GetKeyExchangeAlgorithm(_HandshakeInfo.CipherSuite);
+                            if (_Cipher == null)
                             {
                                 if (keyExchangeAlgorithm == TKeyExchangeAlgorithm.PSK)
                                 {
                                     var clientKeyExchange = new PSKClientKeyExchange();
-                                    this._PSKIdentity = this.PSKIdentities.GetRandom();
-                                    var otherSecret = new byte[this._PSKIdentity.Key.Length];
-                                    clientKeyExchange.PSKIdentity = this._PSKIdentity.Identity;
-                                    this._ClientKeyExchange = clientKeyExchange;
-                                    var preMasterSecret = TLSUtils.GetPSKPreMasterSecret(otherSecret, this._PSKIdentity.Key);
-                                    this._Cipher = TLSUtils.AssignCipher(preMasterSecret, true, this._Version, this._HandshakeInfo);
+                                    _PSKIdentity = PSKIdentities.GetRandom();
+                                    var otherSecret = new byte[_PSKIdentity.Key.Length];
+                                    clientKeyExchange.PSKIdentity = _PSKIdentity.Identity;
+                                    _ClientKeyExchange = clientKeyExchange;
+                                    var preMasterSecret = TLSUtils.GetPSKPreMasterSecret(otherSecret, _PSKIdentity.Key);
+                                    _Cipher = TLSUtils.AssignCipher(preMasterSecret, true, _Version, _HandshakeInfo);
                                 }
                                 else if (keyExchangeAlgorithm == TKeyExchangeAlgorithm.RSA)
                                 {
                                     var clientKeyExchange = new RSAClientKeyExchange();
-                                    this._ClientKeyExchange = clientKeyExchange;
-                                    var PreMasterSecret = TLSUtils.GetRsaPreMasterSecret(this._Version);
-                                    clientKeyExchange.PremasterSecret = TLSUtils.GetEncryptedRsaPreMasterSecret(this.ServerCertificate, PreMasterSecret);
-                                    this._Cipher = TLSUtils.AssignCipher(PreMasterSecret, true, this._Version, this._HandshakeInfo);
+                                    _ClientKeyExchange = clientKeyExchange;
+                                    var PreMasterSecret = TLSUtils.GetRsaPreMasterSecret(_Version);
+                                    clientKeyExchange.PremasterSecret = TLSUtils.GetEncryptedRsaPreMasterSecret(ServerCertificate, PreMasterSecret);
+                                    _Cipher = TLSUtils.AssignCipher(PreMasterSecret, true, _Version, _HandshakeInfo);
                                 }
                                 else
                                 {
@@ -335,14 +334,14 @@ namespace DTLS
                                 }
                             }
 
-                            if (this._SendCertificate)
+                            if (_SendCertificate)
                             {
-                                await this._SendHandshakeMessageAsync(this._Certificate, false).ConfigureAwait(false);
+                                await SendHandshakeMessageAsync(_Certificate, false).ConfigureAwait(false);
                             }
 
-                            await this._SendHandshakeMessageAsync(this._ClientKeyExchange, false).ConfigureAwait(false);
+                            await SendHandshakeMessageAsync(_ClientKeyExchange, false).ConfigureAwait(false);
 
-                            if (this._SendCertificate)
+                            if (_SendCertificate)
                             {
                                 var signatureHashAlgorithm = new SignatureHashAlgorithm() { Signature = TSignatureAlgorithm.ECDSA, Hash = THashAlgorithm.SHA256 };
                                 if (keyExchangeAlgorithm == TKeyExchangeAlgorithm.RSA)
@@ -353,25 +352,25 @@ namespace DTLS
                                 var certVerify = new CertificateVerify
                                 {
                                     SignatureHashAlgorithm = signatureHashAlgorithm,
-                                    Signature = TLSUtils.Sign(this._PrivateKey, this._PrivateKeyRsa, true, this._Version, this._HandshakeInfo, signatureHashAlgorithm, this._HandshakeInfo.GetHash(this._Version))
+                                    Signature = TLSUtils.Sign(_PrivateKey, _PrivateKeyRsa, true, _Version, _HandshakeInfo, signatureHashAlgorithm, _HandshakeInfo.GetHash(_Version))
                                 };
 
-                                await this._SendHandshakeMessageAsync(certVerify, false).ConfigureAwait(false);
+                                await SendHandshakeMessageAsync(certVerify, false).ConfigureAwait(false);
                             }
 
-                            await this._SendChangeCipherSpecAsync().ConfigureAwait(false);
-                            var handshakeHash = this._HandshakeInfo.GetHash(this._Version);
+                            await SendChangeCipherSpecAsync().ConfigureAwait(false);
+                            var handshakeHash = _HandshakeInfo.GetHash(_Version);
                             var finished = new Finished
                             {
-                                VerifyData = TLSUtils.GetVerifyData(this._Version, this._HandshakeInfo, true, true, handshakeHash)
+                                VerifyData = TLSUtils.GetVerifyData(_Version, _HandshakeInfo, true, true, handshakeHash)
                             };
 
-                            await this._SendHandshakeMessageAsync(finished, true).ConfigureAwait(false);
+                            await SendHandshakeMessageAsync(finished, true).ConfigureAwait(false);
                             break;
                         }
                     case THandshakeType.NewSessionTicket:
                         {
-                            this._HandshakeInfo.UpdateHandshakeHash(data);
+                            _HandshakeInfo.UpdateHandshakeHash(data);
                             break;
                         }
                     case THandshakeType.CertificateVerify:
@@ -385,11 +384,11 @@ namespace DTLS
                     case THandshakeType.Finished:
                         {
                             var serverFinished = Finished.Deserialise(stream);
-                            var handshakeHash = this._HandshakeInfo.GetHash(this._Version);
-                            var calculatedVerifyData = TLSUtils.GetVerifyData(this._Version, this._HandshakeInfo, true, false, handshakeHash);
+                            var handshakeHash = _HandshakeInfo.GetHash(_Version);
+                            var calculatedVerifyData = TLSUtils.GetVerifyData(_Version, _HandshakeInfo, true, false, handshakeHash);
                             if (serverFinished.VerifyData.SequenceEqual(calculatedVerifyData))
                             {
-                                this._ConnectionComplete = true;
+                                _ConnectionComplete = true;
                             }
                             break;
                         }
@@ -400,11 +399,11 @@ namespace DTLS
                 }
             }
 
-            this._IsFragment = false;
-            this._FragmentedRecordList.RemoveAll(x => true);
+            _IsFragment = false;
+            _FragmentedRecordList.RemoveAll(x => true);
         }
 
-        private async Task _ProcessRecordAsync(DTLSRecord record)
+        private async Task ProcessRecordAsync(DTLSRecord record)
         {
             try
             {
@@ -417,29 +416,29 @@ namespace DTLS
                 {
                     case TRecordType.ChangeCipherSpec:
                         {
-                            this._ReceivedData = new byte[0];
-                            if (this._ServerEpoch.HasValue)
+                            _ReceivedData = [];
+                            if (_ServerEpoch.HasValue)
                             {
-                                this._ServerEpoch++;
-                                this._ServerSequenceNumber = 0;
-                                this._EncyptedServerEpoch = this._ServerEpoch;
+                                _ServerEpoch++;
+                                _ServerSequenceNumber = 0;
+                                _EncyptedServerEpoch = _ServerEpoch;
                             }
                             break;
                         }
                     case TRecordType.Alert:
                         {
-                            this._ReceivedData = new byte[0];
+                            _ReceivedData = [];
                             AlertRecord alertRecord;
                             try
                             {
-                                if ((this._Cipher == null) || (!this._EncyptedServerEpoch.HasValue))
+                                if ((_Cipher == null) || (!_EncyptedServerEpoch.HasValue))
                                 {
                                     alertRecord = AlertRecord.Deserialise(record.Fragment);
                                 }
                                 else
                                 {
                                     var sequenceNumber = ((long)record.Epoch << 48) + record.SequenceNumber;
-                                    var data = this._Cipher.DecodeCiphertext(sequenceNumber, (byte)TRecordType.Alert, record.Fragment, 0, record.Fragment.Length);
+                                    var data = _Cipher.DecodeCiphertext(sequenceNumber, (byte)TRecordType.Alert, record.Fragment, 0, record.Fragment.Length);
                                     alertRecord = AlertRecord.Deserialise(data);
                                 }
                             }
@@ -452,35 +451,35 @@ namespace DTLS
                             }
                             if (alertRecord.AlertLevel == TAlertLevel.Fatal)
                             {
-                                this._ConnectionComplete = true;
+                                _ConnectionComplete = true;
                             }
                             else if ((alertRecord.AlertLevel == TAlertLevel.Warning) || (alertRecord.AlertDescription == TAlertDescription.CloseNotify))
                             {
                                 if (alertRecord.AlertDescription == TAlertDescription.CloseNotify)
                                 {
-                                    await this._SendAlertAsync(TAlertLevel.Warning, TAlertDescription.CloseNotify).ConfigureAwait(false);
-                                    this._ConnectionComplete = true;
+                                    await SendAlertAsync(TAlertLevel.Warning, TAlertDescription.CloseNotify).ConfigureAwait(false);
+                                    _ConnectionComplete = true;
                                 }
                             }
                             break;
                         }
                     case TRecordType.Handshake:
                         {
-                            this._ReceivedData = new byte[0];
-                            await this._ProcessHandshakeAsync(record).ConfigureAwait(false);
-                            this._ServerSequenceNumber = record.SequenceNumber + 1;
+                            _ReceivedData = [];
+                            await ProcessHandshakeAsync(record).ConfigureAwait(false);
+                            _ServerSequenceNumber = record.SequenceNumber + 1;
                             break;
                         }
                     case TRecordType.ApplicationData:
                         {
-                            if (this._Cipher != null)
+                            if (_Cipher != null)
                             {
                                 var sequenceNumber = ((long)record.Epoch << 48) + record.SequenceNumber;
-                                var data = this._Cipher.DecodeCiphertext(sequenceNumber, (byte)TRecordType.ApplicationData, record.Fragment, 0, record.Fragment.Length);
-                                this._DataReceivedFunction?.Invoke(record.RemoteEndPoint, data);
-                                this._ReceivedData = data;
+                                var data = _Cipher.DecodeCiphertext(sequenceNumber, (byte)TRecordType.ApplicationData, record.Fragment, 0, record.Fragment.Length);
+                                _DataReceivedFunction?.Invoke(record.RemoteEndPoint, data);
+                                _ReceivedData = data;
                             }
-                            this._ServerSequenceNumber = record.SequenceNumber + 1;
+                            _ServerSequenceNumber = record.SequenceNumber + 1;
                             break;
                         }
                     default:
@@ -493,62 +492,62 @@ namespace DTLS
             }
         }
 
-        private async Task _ProcessRecordsAsync()
+        private async Task ProcessRecordsAsync()
         {
-            while (!this._Terminate)
+            while (!_Terminate)
             {
-                var record = this._Records.PeekRecord();
+                var record = _Records.PeekRecord();
                 while (record != null)
                 {
-                    if (this._ServerEpoch.HasValue && (this._ServerSequenceNumber != record.SequenceNumber || this._ServerEpoch != record.Epoch))
+                    if (_ServerEpoch.HasValue && (_ServerSequenceNumber != record.SequenceNumber || _ServerEpoch != record.Epoch))
                     {
-                       record = null;
+                        record = null;
                     }
                     else
                     {
-                        this._Records.RemoveRecord();
-                        await this._ProcessRecordAsync(record).ConfigureAwait(false);
-                        record = this._Records.PeekRecord();
+                        _Records.RemoveRecord();
+                        await ProcessRecordAsync(record).ConfigureAwait(false);
+                        record = _Records.PeekRecord();
                     }
                 }
-                
+
                 await Task.Delay(100).ConfigureAwait(false);
             }
         }
 
-        private void _ReceiveCallback(byte[] recvData, EndPoint ip)
+        private void ReceiveCallback(byte[] recvData, EndPoint ip)
         {
-            if(recvData == null)
+            if (recvData == null)
             {
                 throw new ArgumentNullException(nameof(recvData));
             }
 
-            if(ip == null)
+            if (ip == null)
             {
                 throw new ArgumentNullException(nameof(ip));
             }
 
-            if(!recvData.Any())
+            if (!recvData.Any())
             {
                 //nothing received? return?
                 return;
             }
 
-            if(recvData.Length < 13)
+            if (recvData.Length < 13)
             {
-                this._RecvDataBuffer = this._RecvDataBuffer.Concat(recvData).ToArray();
+                _RecvDataBuffer = [.. _RecvDataBuffer, .. recvData];
                 return;
             }
 
             var length = BitConverter.ToUInt16(recvData.Skip(11).Take(2).Reverse().ToArray(), 0);
             if (recvData.Length < length)
             {
-                this._RecvDataBuffer = this._RecvDataBuffer.Concat(recvData).ToArray();
+                _RecvDataBuffer = [.. _RecvDataBuffer, .. recvData];
                 return;
             }
 
-            var fullData = this._RecvDataBuffer.Concat(recvData).ToArray();
-            this._RecvDataBuffer = new byte[0];
+            var fullData = _RecvDataBuffer.Concat(recvData).ToArray();
+            _RecvDataBuffer = [];
 
             using (var stream = new MemoryStream(fullData))
             {
@@ -556,14 +555,14 @@ namespace DTLS
                 {
                     var record = DTLSRecord.Deserialise(stream);
                     record.RemoteEndPoint = ip;
-                    this._Records.Add(record);
+                    _Records.Add(record);
                 }
             }
         }
 
-        private async Task<Socket> _SetupSocketAsync()
+        private async Task<Socket> SetupSocketAsync()
         {
-            var addressFamily = this.LocalEndPoint.AddressFamily;
+            var addressFamily = LocalEndPoint.AddressFamily;
             var soc = new Socket(addressFamily, SocketType.Dgram, ProtocolType.Udp);
             if (addressFamily == AddressFamily.InterNetworkV6)
             {
@@ -577,29 +576,29 @@ namespace DTLS
             {
                 // do not throw SocketError.ConnectionReset by ignoring ICMP Port Unreachable
                 const int SIO_UDP_CONNRESET = -1744830452;
-                soc.IOControl(SIO_UDP_CONNRESET, new byte[] { 0 }, null);
+                soc.IOControl(SIO_UDP_CONNRESET, [0], null);
             }
 
-            await soc.ConnectAsync(this._ServerEndPoint).ConfigureAwait(false);
+            await soc.ConnectAsync(_ServerEndPoint).ConfigureAwait(false);
             return soc;
         }
 
-        public async Task SendAsync(byte[] data) => 
-            await this.SendAsync(data, TimeSpan.FromSeconds(1)).ConfigureAwait(false);
+        public async Task SendAsync(byte[] data) =>
+            await SendAsync(data, TimeSpan.FromSeconds(1)).ConfigureAwait(false);
 
         public async Task SendAsync(byte[] data, TimeSpan timeout)
         {
-            if(data == null)
+            if (data == null)
             {
                 throw new ArgumentNullException(nameof(data));
             }
 
-            if(this._Socket == null)
+            if (_Socket == null)
             {
                 throw new Exception("Socket Cannot be Null");
             }
 
-            if(this._Cipher == null)
+            if (_Cipher == null)
             {
                 throw new Exception("Cipher Cannot be Null");
             }
@@ -608,12 +607,12 @@ namespace DTLS
             {
                 RecordType = TRecordType.ApplicationData,
                 Epoch = _Epoch,
-                SequenceNumber = this._NextSequenceNumber(),
-                Version = this._Version
+                SequenceNumber = NextSequenceNumber(),
+                Version = _Version
             };
 
             var sequenceNumber = ((long)record.Epoch << 48) + record.SequenceNumber;
-            record.Fragment = this._Cipher.EncodePlaintext(sequenceNumber, (byte)TRecordType.ApplicationData, data, 0, data.Length);
+            record.Fragment = _Cipher.EncodePlaintext(sequenceNumber, (byte)TRecordType.ApplicationData, data, 0, data.Length);
 
             var recordSize = DTLSRecord.RECORD_OVERHEAD + record.Fragment.Length;
             var recordBytes = new byte[recordSize];
@@ -622,27 +621,32 @@ namespace DTLS
                 record.Serialise(stream);
             }
 
-            await this._Socket.SendAsync(recordBytes, timeout).ConfigureAwait(false);
+#if NET6_0_OR_GREATER
+            var ct = new CancellationTokenSource(timeout).Token;
+            await _Socket.SendAsync(new ReadOnlyMemory<byte>(recordBytes), SocketFlags.None, ct).ConfigureAwait(false);
+#else
+            await _Socket.SendAsync(recordBytes, timeout).ConfigureAwait(false);
+#endif
         }
 
         public async Task<byte[]> SendAndGetResponseAsync(byte[] data, TimeSpan timeout)
         {
-            await this.SendAsync(data, timeout).ConfigureAwait(false);
-            return await this.ReceiveDataAsync(timeout).ConfigureAwait(false);
+            await SendAsync(data, timeout).ConfigureAwait(false);
+            return await ReceiveDataAsync(timeout).ConfigureAwait(false);
         }
 
-        public async Task<byte[]> SendAndGetResonseAsync(byte[] data) => 
-            await this.SendAndGetResponseAsync(data, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        public async Task<byte[]> SendAndGetResonseAsync(byte[] data) =>
+            await SendAndGetResponseAsync(data, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
 
         public async Task<byte[]> ReceiveDataAsync() =>
-            await this.ReceiveDataAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+            await ReceiveDataAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
 
         public async Task<byte[]> ReceiveDataAsync(TimeSpan timeout)
         {
             var startTime = DateTime.Now;
-            while ((this._ReceivedData == null || !this._ReceivedData.Any()))
+            while ((_ReceivedData == null || !_ReceivedData.Any()))
             {
-                if((DateTime.Now - startTime) >= timeout)
+                if ((DateTime.Now - startTime) >= timeout)
                 {
                     throw new TimeoutException();
                 }
@@ -650,15 +654,15 @@ namespace DTLS
                 await Task.Delay(100).ConfigureAwait(false);
             }
 
-            return this._ReceivedData;
+            return _ReceivedData;
         }
 
-        private async Task _SendAlertAsync(TAlertLevel alertLevel, TAlertDescription alertDescription) =>
-           await this._SendAlertAsync(alertLevel, alertDescription, TimeSpan.FromSeconds(1)).ConfigureAwait(false);
+        private async Task SendAlertAsync(TAlertLevel alertLevel, TAlertDescription alertDescription) =>
+           await SendAlertAsync(alertLevel, alertDescription, TimeSpan.FromSeconds(1)).ConfigureAwait(false);
 
-        private async Task _SendAlertAsync(TAlertLevel alertLevel, TAlertDescription alertDescription, TimeSpan timeout)
+        private async Task SendAlertAsync(TAlertLevel alertLevel, TAlertDescription alertDescription, TimeSpan timeout)
         {
-            if(this._Socket == null)
+            if (_Socket == null)
             {
                 throw new Exception("Soket Cannot be Null");
             }
@@ -667,8 +671,8 @@ namespace DTLS
             {
                 RecordType = TRecordType.Alert,
                 Epoch = _Epoch,
-                SequenceNumber = this._NextSequenceNumber(),
-                Version = this._Version
+                SequenceNumber = NextSequenceNumber(),
+                Version = _Version
             };
 
             var sequenceNumber = ((long)record.Epoch << 48) + record.SequenceNumber;
@@ -676,7 +680,7 @@ namespace DTLS
             var data = new byte[2];
             data[0] = (byte)alertLevel;
             data[1] = (byte)alertDescription;
-            record.Fragment = this._Cipher == null ? data : this._Cipher.EncodePlaintext(sequenceNumber, (byte)TRecordType.ApplicationData, data, 0, data.Length);
+            record.Fragment = _Cipher == null ? data : _Cipher.EncodePlaintext(sequenceNumber, (byte)TRecordType.ApplicationData, data, 0, data.Length);
             var recordSize = DTLSRecord.RECORD_OVERHEAD + record.Fragment.Length;
             var recordBytes = new byte[recordSize];
             using (var stream = new MemoryStream(recordBytes))
@@ -684,25 +688,25 @@ namespace DTLS
                 record.Serialise(stream);
             }
 
-            await this._Socket.SendAsync(recordBytes, timeout).ConfigureAwait(false);
+            await _Socket.SendAsync(recordBytes, timeout).ConfigureAwait(false);
         }
 
-        private async Task _SendChangeCipherSpecAsync() =>
-            await this._SendChangeCipherSpecAsync(TimeSpan.FromSeconds(1)).ConfigureAwait(false);
+        private async Task SendChangeCipherSpecAsync() =>
+            await SendChangeCipherSpecAsync(TimeSpan.FromSeconds(1)).ConfigureAwait(false);
 
-        private async Task _SendChangeCipherSpecAsync(TimeSpan timeout)
+        private async Task SendChangeCipherSpecAsync(TimeSpan timeout)
         {
-            if(this._Socket == null)
+            if (_Socket == null)
             {
                 throw new Exception("Socket Cannot be Null");
             }
 
-            var bytes = this._GetChangeCipherSpec();
-            await this._Socket.SendAsync(bytes, timeout).ConfigureAwait(false);
-            this._ChangeEpoch();
+            var bytes = GetChangeCipherSpec();
+            await _Socket.SendAsync(bytes, timeout).ConfigureAwait(false);
+            ChangeEpoch();
         }
 
-        private byte[] _GetChangeCipherSpec()
+        private byte[] GetChangeCipherSpec()
         {
             var size = 1;
             var responseSize = DTLSRecord.RECORD_OVERHEAD + size;
@@ -711,9 +715,9 @@ namespace DTLS
             {
                 RecordType = TRecordType.ChangeCipherSpec,
                 Epoch = _Epoch,
-                SequenceNumber = this._NextSequenceNumber(),
+                SequenceNumber = NextSequenceNumber(),
                 Fragment = new byte[size],
-                Version = this._Version
+                Version = _Version
             };
 
             record.Fragment[0] = 1;
@@ -724,14 +728,14 @@ namespace DTLS
             return response;
         }
 
-        private IEnumerable<byte[]> _GetBytes(IHandshakeMessage handshakeMessage, bool encrypt)
+        private List<byte[]> GetBytes(IHandshakeMessage handshakeMessage, bool encrypt)
         {
-            if(handshakeMessage == null)
+            if (handshakeMessage == null)
             {
                 throw new ArgumentNullException(nameof(handshakeMessage));
             }
 
-            var size = handshakeMessage.CalculateSize(this._Version);
+            var size = handshakeMessage.CalculateSize(_Version);
             var maxPayloadSize = _MaxPacketSize - DTLSRecord.RECORD_OVERHEAD + HandshakeRecord.RECORD_OVERHEAD;
 
             if (size > maxPayloadSize)
@@ -742,7 +746,7 @@ namespace DTLS
                 {
                     RecordType = TRecordType.Handshake,
                     Epoch = _Epoch,
-                    Version = this._Version
+                    Version = _Version
                 };
 
                 var handshakeRecord = new HandshakeRecord
@@ -761,16 +765,16 @@ namespace DTLS
                     using (var stream = new MemoryStream(record.Fragment))
                     {
                         handshakeRecord.Serialise(stream);
-                        handshakeMessage.Serialise(stream, this._Version);
+                        handshakeMessage.Serialise(stream, _Version);
                     }
 
-                    this._HandshakeInfo.UpdateHandshakeHash(record.Fragment);
+                    _HandshakeInfo.UpdateHandshakeHash(record.Fragment);
                 }
 
                 var dataMessage = new byte[size];
                 using (var stream = new MemoryStream(dataMessage))
                 {
-                    handshakeMessage.Serialise(stream, this._Version);
+                    handshakeMessage.Serialise(stream, _Version);
                 }
 
                 var dataMessageFragments = dataMessage.ChunkBySize(maxPayloadSize);
@@ -779,7 +783,7 @@ namespace DTLS
                 {
                     handshakeRecord.Length = (uint)size;
                     handshakeRecord.FragmentLength = (uint)x.Count();
-                    record.SequenceNumber = this._NextSequenceNumber();
+                    record.SequenceNumber = NextSequenceNumber();
 
                     var baseMessage = new byte[HandshakeRecord.RECORD_OVERHEAD];
                     using (var stream = new MemoryStream(baseMessage))
@@ -787,13 +791,13 @@ namespace DTLS
                         handshakeRecord.Serialise(stream);
                     }
 
-                    record.Fragment = baseMessage.Concat(x).ToArray();
+                    record.Fragment = [.. baseMessage, .. x];
 
                     var responseSize = DTLSRecord.RECORD_OVERHEAD + HandshakeRecord.RECORD_OVERHEAD + x.Count();
-                    if ((this._Cipher != null) && encrypt)
+                    if ((_Cipher != null) && encrypt)
                     {
                         var sequenceNumber = ((long)record.Epoch << 48) + record.SequenceNumber;
-                        record.Fragment = this._Cipher.EncodePlaintext(sequenceNumber, (byte)TRecordType.Handshake, record.Fragment, 0, record.Fragment.Length);
+                        record.Fragment = _Cipher.EncodePlaintext(sequenceNumber, (byte)TRecordType.Handshake, record.Fragment, 0, record.Fragment.Length);
                         responseSize = DTLSRecord.RECORD_OVERHEAD + record.Fragment.Length;
                     }
                     var response = new byte[responseSize];
@@ -806,7 +810,7 @@ namespace DTLS
                     handshakeRecord.FragmentOffset += (uint)x.Count();
                 });
 
-                this._MessageSequence++;
+                _MessageSequence++;
                 return wholeMessage;
             }
             else
@@ -815,9 +819,9 @@ namespace DTLS
                 {
                     RecordType = TRecordType.Handshake,
                     Epoch = _Epoch,
-                    SequenceNumber = this._NextSequenceNumber(),
+                    SequenceNumber = NextSequenceNumber(),
                     Fragment = new byte[HandshakeRecord.RECORD_OVERHEAD + size],
-                    Version = this._Version
+                    Version = _Version
                 };
 
                 var handshakeRecord = new HandshakeRecord
@@ -825,26 +829,26 @@ namespace DTLS
                     MessageType = handshakeMessage.MessageType,
                     MessageSeq = _MessageSequence
                 };
-                this._MessageSequence++;
+                _MessageSequence++;
                 handshakeRecord.Length = (uint)size;
                 handshakeRecord.FragmentLength = (uint)size;
                 using (var stream = new MemoryStream(record.Fragment))
                 {
                     handshakeRecord.Serialise(stream);
-                    handshakeMessage.Serialise(stream, this._Version);
+                    handshakeMessage.Serialise(stream, _Version);
                 }
 
                 if (!(handshakeMessage.MessageType == THandshakeType.HelloVerifyRequest
                    || (handshakeMessage.MessageType == THandshakeType.ClientHello && (handshakeMessage as ClientHello).Cookie == null)))
                 {
-                    this._HandshakeInfo.UpdateHandshakeHash(record.Fragment);
+                    _HandshakeInfo.UpdateHandshakeHash(record.Fragment);
                 }
 
                 var responseSize = DTLSRecord.RECORD_OVERHEAD + HandshakeRecord.RECORD_OVERHEAD + size;
-                if ((this._Cipher != null) && encrypt)
+                if ((_Cipher != null) && encrypt)
                 {
                     var sequenceNumber = ((long)record.Epoch << 48) + record.SequenceNumber;
-                    record.Fragment = this._Cipher.EncodePlaintext(sequenceNumber, (byte)TRecordType.Handshake, record.Fragment, 0, record.Fragment.Length);
+                    record.Fragment = _Cipher.EncodePlaintext(sequenceNumber, (byte)TRecordType.Handshake, record.Fragment, 0, record.Fragment.Length);
                     responseSize = DTLSRecord.RECORD_OVERHEAD + record.Fragment.Length;
                 }
 
@@ -854,22 +858,22 @@ namespace DTLS
                     record.Serialise(stream);
                 }
 
-                return new List<byte[]>() { response };
+                return [response];
             }
         }
 
-        private async Task _SendHelloAsync(byte[] cookie)
+        private async Task SendHelloAsync(byte[] cookie)
         {
             var clientHello = new ClientHello
             {
-                ClientVersion = this._Version,
-                Random = this._HandshakeInfo.ClientRandom,
+                ClientVersion = _Version,
+                Random = _HandshakeInfo.ClientRandom,
                 Cookie = cookie
             };
 
-            var cipherSuites = new ushort[this.SupportedCipherSuites.Count];
+            var cipherSuites = new ushort[SupportedCipherSuites.Count];
             var index = 0;
-            foreach (var item in this.SupportedCipherSuites)
+            foreach (var item in SupportedCipherSuites)
             {
                 cipherSuites[index] = (ushort)item;
                 index++;
@@ -878,12 +882,12 @@ namespace DTLS
             clientHello.CompressionMethods = new byte[1];
             clientHello.CompressionMethods[0] = 0;
 
-            clientHello.Extensions = new Extensions
-            {
-                new Extension() { ExtensionType = TExtensionType.SessionTicketTLS },
-                new Extension() { ExtensionType = TExtensionType.EncryptThenMAC },
-                new Extension() { ExtensionType = TExtensionType.ExtendedMasterSecret },
-            };
+            clientHello.Extensions =
+                [
+                    new Extension() { ExtensionType = TExtensionType.SessionTicketTLS },
+                    new Extension() { ExtensionType = TExtensionType.EncryptThenMAC },
+                    new Extension() { ExtensionType = TExtensionType.ExtendedMasterSecret },
+                ];
 
             var ellipticCurvesExtension = new EllipticCurvesExtension();
             for (var curve = 0; curve < (int)TEllipticCurve.secp521r1; curve++)
@@ -901,29 +905,29 @@ namespace DTLS
             var signatureAlgorithmsExtension = new SignatureAlgorithmsExtension();
             signatureAlgorithmsExtension.SupportedAlgorithms.Add(new SignatureHashAlgorithm() { Hash = THashAlgorithm.SHA1, Signature = TSignatureAlgorithm.RSA });
             clientHello.Extensions.Add(new Extension(signatureAlgorithmsExtension));
-            await this._SendHandshakeMessageAsync(clientHello, false, TimeSpan.FromSeconds(1)).ConfigureAwait(false);
+            await SendHandshakeMessageAsync(clientHello, false, TimeSpan.FromSeconds(1)).ConfigureAwait(false);
         }
 
-        private async Task _SendHandshakeMessageAsync(IHandshakeMessage handshakeMessage, bool encrypt) =>
-            await this._SendHandshakeMessageAsync(handshakeMessage, encrypt, TimeSpan.FromSeconds(1)).ConfigureAwait(false);
+        private async Task SendHandshakeMessageAsync(IHandshakeMessage handshakeMessage, bool encrypt) =>
+            await SendHandshakeMessageAsync(handshakeMessage, encrypt, TimeSpan.FromSeconds(1)).ConfigureAwait(false);
 
-        private async Task _SendHandshakeMessageAsync(IHandshakeMessage handshakeMessage, bool encrypt, TimeSpan timeout)
+        private async Task SendHandshakeMessageAsync(IHandshakeMessage handshakeMessage, bool encrypt, TimeSpan timeout)
         {
-            if(handshakeMessage == null)
+            if (handshakeMessage == null)
             {
                 throw new ArgumentNullException(nameof(handshakeMessage));
             }
 
-            if(this._Socket == null)
+            if (_Socket == null)
             {
                 throw new Exception("Socket Cannot be Null");
             }
 
-            var byteArrayList = this._GetBytes(handshakeMessage, encrypt);
+            var byteArrayList = GetBytes(handshakeMessage, encrypt);
             foreach (var byteArray in byteArrayList)
             {
-                Console.WriteLine($"Sending {handshakeMessage.MessageType} {byteArray.Count()}");
-                await this._Socket.SendAsync(byteArray, timeout).ConfigureAwait(false);
+                Console.WriteLine($"Sending {handshakeMessage.MessageType} {byteArray.Length}");
+                await _Socket.SendAsync(byteArray, timeout).ConfigureAwait(false);
             }
         }
 
@@ -934,33 +938,31 @@ namespace DTLS
                 throw new ArgumentNullException(nameof(serverEndPoint));
             }
 
-            await this.ConnectToServerAsync(serverEndPoint, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+            await ConnectToServerAsync(serverEndPoint, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5)).ConfigureAwait(false);
         }
 
         public async Task ConnectToServerAsync(EndPoint serverEndPoint, TimeSpan receiveTimeout, TimeSpan connectionTimeout)
         {
-            this._ServerEndPoint = serverEndPoint ?? throw new ArgumentNullException(nameof(serverEndPoint));
-            if (this.SupportedCipherSuites.Count == 0)
+            _ServerEndPoint = serverEndPoint ?? throw new ArgumentNullException(nameof(serverEndPoint));
+            if (SupportedCipherSuites.Count == 0)
             {
-                this.SupportedCipherSuites.Add(TCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8); //Test 1.2
-                this.SupportedCipherSuites.Add(TCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256); //Tested 1.0 1.2
-                this.SupportedCipherSuites.Add(TCipherSuite.TLS_PSK_WITH_AES_128_CCM_8); //Test 1.2
-                this.SupportedCipherSuites.Add(TCipherSuite.TLS_PSK_WITH_AES_128_CBC_SHA256); //Tested 1.0 1.2
-                this.SupportedCipherSuites.Add(TCipherSuite.TLS_ECDHE_PSK_WITH_AES_128_CBC_SHA256); //Tested 1.0 1.2
-                this.SupportedCipherSuites.Add(TCipherSuite.TLS_RSA_WITH_AES_256_CBC_SHA);
+                SupportedCipherSuites.Add(TCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8); //Test 1.2
+                SupportedCipherSuites.Add(TCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256); //Tested 1.0 1.2
+                SupportedCipherSuites.Add(TCipherSuite.TLS_PSK_WITH_AES_128_CCM_8); //Test 1.2
+                SupportedCipherSuites.Add(TCipherSuite.TLS_PSK_WITH_AES_128_CBC_SHA256); //Tested 1.0 1.2
+                SupportedCipherSuites.Add(TCipherSuite.TLS_ECDHE_PSK_WITH_AES_128_CBC_SHA256); //Tested 1.0 1.2
+                SupportedCipherSuites.Add(TCipherSuite.TLS_RSA_WITH_AES_256_CBC_SHA);
             }
 
-            this._Socket = await this._SetupSocketAsync().ConfigureAwait(false);
-#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-            this._ProcessRecordTask  = Task.Run(() => this._ProcessRecordsAsync().ConfigureAwait(false), this._Cts.Token); //fire and forget
-            this._ReceiveTask = Task.Run(() => this._StartReceiveAsync(this._Socket, receiveTimeout).ConfigureAwait(false), this._Cts.Token); // fire and forget
-#pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-            await this._SendHelloAsync(null).ConfigureAwait(false);
+            _Socket = await SetupSocketAsync().ConfigureAwait(false);
+            _ProcessRecordTask = Task.Run(() => ProcessRecordsAsync().ConfigureAwait(false), _Cts.Token); //fire and forget
+            _ReceiveTask = Task.Run(() => StartReceiveAsync(_Socket, receiveTimeout).ConfigureAwait(false), _Cts.Token); // fire and forget
+            await SendHelloAsync(null).ConfigureAwait(false);
 
             var startTime = DateTime.Now;
-            while (!this._ConnectionComplete)
+            while (!_ConnectionComplete)
             {
-                if((DateTime.Now - startTime) >= connectionTimeout)
+                if ((DateTime.Now - startTime) >= connectionTimeout)
                 {
                     throw new TimeoutException("Could Not Connect To Server");
                 }
@@ -979,20 +981,20 @@ namespace DTLS
             var mainCert = chain.ChainElements[0].Certificate;
 
 #if NETSTANDARD2_1 || NETSTANDARD2_0
-            this._PrivateKeyRsa = ((RSACng)mainCert.PrivateKey).Key;
-            this.PublicKey = ((RSACng)mainCert.PublicKey.Key).Key;
+            _PrivateKeyRsa = ((RSACng)mainCert.PrivateKey).Key;
+            PublicKey = ((RSACng)mainCert.PublicKey.Key).Key;
 #else
-            this._PrivateKeyRsa = (RSACryptoServiceProvider)mainCert.PrivateKey;
-            this.PublicKey = (RSACryptoServiceProvider)mainCert.PublicKey.Key;
+            _PrivateKeyRsa = (RSACryptoServiceProvider)mainCert.GetRSAPrivateKey();
+            PublicKey = (RSACryptoServiceProvider)mainCert.GetRSAPublicKey();
 #endif
 
             var certChain = new List<byte[]>();
-            foreach(var element in chain.ChainElements)
+            foreach (var element in chain.ChainElements)
             {
                 certChain.Add(element.Certificate.GetRawCertData());
             }
 
-            this._Certificate = new Certificate
+            _Certificate = new Certificate
             {
                 CertChain = certChain,
                 CertificateType = TCertificateType.X509
@@ -1008,13 +1010,13 @@ namespace DTLS
 
             using (var stream = File.OpenRead(filename))
             {
-                this.LoadCertificateFromPem(stream);
+                LoadCertificateFromPem(stream);
             }
         }
 
         public void LoadCertificateFromPem(Stream stream)
         {
-            if(stream == null)
+            if (stream == null)
             {
                 throw new ArgumentNullException(nameof(stream));
             }
@@ -1031,29 +1033,40 @@ namespace DTLS
                 }
                 else if (pem.Type.EndsWith("PRIVATE KEY"))
                 {
-                    this._PrivateKey = Certificates.GetPrivateKeyFromPEM(pem);
+                    _PrivateKey = Certificates.GetPrivateKeyFromPEM(pem);
                 }
                 pem = reader.ReadPemObject();
             }
-            this._Certificate = new Certificate
+            _Certificate = new Certificate
             {
                 CertChain = chain,
                 CertificateType = TCertificateType.X509
             };
         }
 
-        private async Task _StartReceiveAsync(Socket socket, TimeSpan timeout)
+        private async Task StartReceiveAsync(Socket socket, TimeSpan timeout)
         {
-            if(socket == null)
+            if (socket == null)
             {
                 throw new ArgumentNullException(nameof(socket));
             }
 
-            while (!this._Terminate)
+            while (!_Terminate)
             {
                 var available = socket.Available;
                 if (available > 0)
                 {
+#if NET6_0_OR_GREATER
+                    var buffer = new Memory<byte>();
+                    var ct = new CancellationTokenSource(timeout).Token;
+                    var recvd = await socket.ReceiveAsync(buffer, SocketFlags.None, ct).ConfigureAwait(false);
+                    if (recvd < available)
+                    {
+                        buffer = buffer[..recvd];
+                    }
+
+                    ReceiveCallback(buffer.ToArray(), socket.RemoteEndPoint);
+#else
                     var buffer = new byte[available];
                     var recvd = await socket.ReceiveAsync(buffer, timeout).ConfigureAwait(false);
                     if (recvd < available)
@@ -1061,7 +1074,8 @@ namespace DTLS
                         buffer = buffer.Take(recvd).ToArray();
                     }
 
-                    this._ReceiveCallback(buffer, socket.RemoteEndPoint);
+                    ReceiveCallback(buffer, socket.RemoteEndPoint);
+#endif
                 }
                 else
                 {
@@ -1070,44 +1084,51 @@ namespace DTLS
             }
         }
 
-        public void SetDataReceivedFunction(Action<EndPoint, byte[]> function) => this._DataReceivedFunction = function;
+        public void SetDataReceivedFunction(Action<EndPoint, byte[]> function) => _DataReceivedFunction = function;
 
-        public void SetVersion(Version version) => this._Version = version ?? throw new ArgumentNullException(nameof(version));
+        public void SetVersion(Version version) => _Version = version ?? throw new ArgumentNullException(nameof(version));
 
-        private void _Dispose(bool disposing)
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA1816:Dispose methods should call SuppressFinalize", Justification = "Dipose methods call this one")]
+        private async Task Dispose(bool disposing)
         {
             //prevent multiple calls to Dispose
-            if (this._Disposed)
+            if (_Disposed)
             {
                 return;
             }
 
             if (disposing)
             {
-                this._Terminate = true;
+                _Terminate = true;
 
-                if (this._Socket != null)
+                if (_Socket != null)
                 {
-                    this._SendAlertAsync(TAlertLevel.Fatal, TAlertDescription.CloseNotify).ConfigureAwait(false).GetAwaiter().GetResult();
-                    this._Socket.Dispose();
-                    this._Socket = null;
+                    await SendAlertAsync(TAlertLevel.Fatal, TAlertDescription.CloseNotify).ConfigureAwait(false);
+                    _Socket.Dispose();
+                    _Socket = null;
                 }
 
-                this._Cts.Cancel();
-                this._ReceiveTask = null;
-                this._ProcessRecordTask = null;
+                _Cts.Cancel();
+                _ReceiveTask = null;
+                _ProcessRecordTask = null;
             }
 
             //Tell the GC not to call the finalizer later
             GC.SuppressFinalize(this);
-            this._Disposed = true;
+            _Disposed = true;
         }
 
-        public void Dispose() => this._Dispose(true);
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA1816:Dispose methods should call SuppressFinalize", Justification = "Called in private Dispose")]
+        public void Dispose() => Dispose(true).GetAwaiter().GetResult();
+
+#if NET6_0_OR_GREATER
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA1816:Dispose methods should call SuppressFinalize", Justification = "Called in private Dispose")]
+        public async ValueTask DisposeAsync() => await Dispose(true);
+#endif
 
         ~Client()
         {
-            this._Dispose(false);
+            Dispose(false).GetAwaiter().GetResult();
         }
     }
 }

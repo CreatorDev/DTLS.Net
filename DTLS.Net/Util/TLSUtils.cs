@@ -33,21 +33,21 @@ using System.Text;
 namespace DTLS
 {
     internal static class TLSUtils
-	{
-        public static DateTime UnixEpoch = new DateTime(1970, 1, 1);
+    {
+        public static DateTime UnixEpoch = new(1970, 1, 1);
 
-		private static readonly byte[] _MASTER_SECRET_LABEL = Encoding.ASCII.GetBytes("master secret");
+        private static readonly byte[] _MASTER_SECRET_LABEL = Encoding.ASCII.GetBytes("master secret");
         private const int _MASTERSECRETLENGTH = 48;
-		private static readonly TlsCipherFactory _CipherFactory = new DefaultTlsCipherFactory();   
+        private static readonly TlsCipherFactory _CipherFactory = new DefaultTlsCipherFactory();
 
-		public static byte[] CalculateMasterSecret(byte[] preMasterSecret, IKeyExchange keyExchange)
-		{
-            if(preMasterSecret == null)
+        public static byte[] CalculateMasterSecret(byte[] preMasterSecret, IKeyExchange keyExchange)
+        {
+            if (preMasterSecret == null)
             {
                 throw new ArgumentNullException(nameof(preMasterSecret));
             }
 
-            if(keyExchange == null)
+            if (keyExchange == null)
             {
                 throw new ArgumentNullException(nameof(keyExchange));
             }
@@ -57,29 +57,29 @@ namespace DTLS
                 .Concat(keyExchange.ServerRandom.Serialise())
                 .ToArray();
 
-			var result = PseudorandomFunction(preMasterSecret, seed, _MASTERSECRETLENGTH);
-			Array.Clear(preMasterSecret, 0, preMasterSecret.Length);
-			return result;
-		}
-              
-		public static byte[] PseudorandomFunction(byte[] secret, byte[] seed, int length)
-		{
-            if(secret == null)
+            var result = PseudorandomFunction(preMasterSecret, seed, _MASTERSECRETLENGTH);
+            Array.Clear(preMasterSecret, 0, preMasterSecret.Length);
+            return result;
+        }
+
+        public static byte[] PseudorandomFunction(byte[] secret, byte[] seed, int length)
+        {
+            if (secret == null)
             {
                 throw new ArgumentNullException(nameof(secret));
             }
 
-            if(seed == null)
+            if (seed == null)
             {
                 throw new ArgumentNullException(nameof(seed));
             }
 
-            if(length < 0)
+            if (length < 0)
             {
                 throw new ArgumentOutOfRangeException(nameof(length));
             }
 
-			var result = new byte[length];
+            var result = new byte[length];
             using (var hmac = new HMACSHA256(secret))
             {
                 var iterations = (int)Math.Ceiling(length / (double)hmac.HashSize);
@@ -96,10 +96,10 @@ namespace DTLS
                 }
                 return result;
             }
-		}
+        }
 
-		private static int _GetEncryptionAlgorithm(TCipherSuite cipherSuite)
-		{
+        private static int GetEncryptionAlgorithm(TCipherSuite cipherSuite)
+        {
             if (cipherSuite == TCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8)
             {
                 return EncryptionAlgorithm.AES_128_CCM_8;
@@ -131,10 +131,10 @@ namespace DTLS
             }
 
             return 0;
-		}
+        }
 
-		private static int _GetMACAlgorithm(TCipherSuite cipherSuite)
-		{
+        private static int GetMACAlgorithm(TCipherSuite cipherSuite)
+        {
             if (cipherSuite == TCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8)
             {
                 return MacAlgorithm.cls_null;
@@ -166,21 +166,21 @@ namespace DTLS
             }
 
             return 0;
-		}
+        }
 
         public static TlsCipher AssignCipher(byte[] preMasterSecret, bool client, Version version, HandshakeInfo handshakeInfo)
         {
-            if(preMasterSecret == null)
+            if (preMasterSecret == null)
             {
                 throw new ArgumentNullException(nameof(preMasterSecret));
             }
 
-            if(version == null)
+            if (version == null)
             {
                 throw new ArgumentNullException(nameof(version));
             }
 
-            if(handshakeInfo == null)
+            if (handshakeInfo == null)
             {
                 throw new ArgumentNullException(nameof(handshakeInfo));
             }
@@ -194,23 +194,23 @@ namespace DTLS
                 TlsUtilities.PRF_legacy(preMasterSecret, asciiLabel, seed, 48)
                 : TlsUtilities.PRF(context, preMasterSecret, asciiLabel, seed, 48);
 
-            seed = securityParameters.ServerRandom.Concat(securityParameters.ClientRandom).ToArray();
+            seed = [.. securityParameters.ServerRandom, .. securityParameters.ClientRandom];
             var key_block = TlsUtilities.IsTlsV11(context) ?
                 TlsUtilities.PRF_legacy(handshakeInfo.MasterSecret, ExporterLabel.key_expansion, seed, 96)
                 : TlsUtilities.PRF(context, handshakeInfo.MasterSecret, ExporterLabel.key_expansion, seed, 96);
 
             return _CipherFactory
-                .CreateCipher(context, _GetEncryptionAlgorithm(handshakeInfo.CipherSuite), _GetMACAlgorithm(handshakeInfo.CipherSuite));
+                .CreateCipher(context, GetEncryptionAlgorithm(handshakeInfo.CipherSuite), GetMACAlgorithm(handshakeInfo.CipherSuite));
         }
 
         public static byte[] CalculateKeyBlock(TlsContext context, int size)
         {
-            if(context == null)
+            if (context == null)
             {
                 throw new ArgumentNullException(nameof(context));
             }
 
-            if(size < 0)
+            if (size < 0)
             {
                 throw new ArgumentOutOfRangeException(nameof(size));
             }
@@ -228,7 +228,7 @@ namespace DTLS
         public static byte[] Sign(AsymmetricKeyParameter privateKey, CngKey rsaKey, bool client, Version version, HandshakeInfo handshakeInfo,
             SignatureHashAlgorithm signatureHashAlgorithm, byte[] hash)
 #else
-        public static byte[] Sign(AsymmetricKeyParameter privateKey, RSACryptoServiceProvider rsaKey, bool client, Version version, HandshakeInfo handshakeInfo, 
+        public static byte[] Sign(AsymmetricKeyParameter privateKey, RSACryptoServiceProvider rsaKey, bool client, Version version, HandshakeInfo handshakeInfo,
             SignatureHashAlgorithm signatureHashAlgorithm, byte[] hash)
 #endif
         {
@@ -320,14 +320,15 @@ namespace DTLS
             return result;
         }
 #else
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Interoperability", "CA1416:Validate platform compatibility", Justification = "The RSA items are windows only, however we want to allow for the other types of encryption to be use in other platforms")]
         public static byte[] SignRsa(RSACryptoServiceProvider rsaCsp, byte[] hash)
         {
-            if(rsaCsp == null)
+            if (rsaCsp == null)
             {
                 throw new ArgumentNullException(nameof(rsaCsp));
             }
 
-            if(hash == null)
+            if (hash == null)
             {
                 throw new ArgumentNullException(nameof(hash));
             }
@@ -349,20 +350,20 @@ namespace DTLS
         }
 #endif
 
-        public static byte[] GetVerifyData(Version version, HandshakeInfo handshakeInfo, bool client, bool isClientFinished, 
+        public static byte[] GetVerifyData(Version version, HandshakeInfo handshakeInfo, bool client, bool isClientFinished,
             byte[] handshakeHash)
         {
-            if(version == null)
+            if (version == null)
             {
                 throw new ArgumentNullException(nameof(version));
             }
 
-            if(handshakeInfo == null)
+            if (handshakeInfo == null)
             {
                 throw new ArgumentNullException(nameof(handshakeInfo));
             }
 
-            if(handshakeHash == null)
+            if (handshakeHash == null)
             {
                 throw new ArgumentNullException(nameof(handshakeHash));
             }
@@ -376,12 +377,12 @@ namespace DTLS
 
         internal static byte[] GetPSKPreMasterSecret(byte[] otherSecret, byte[] psk)
         {
-            if(otherSecret == null)
+            if (otherSecret == null)
             {
                 throw new ArgumentNullException(nameof(otherSecret));
             }
 
-            if(psk == null)
+            if (psk == null)
             {
                 throw new ArgumentNullException(nameof(psk));
             }
@@ -396,7 +397,7 @@ namespace DTLS
 
         internal static byte[] GetRsaPreMasterSecret(Version version)
         {
-            if(version == null)
+            if (version == null)
             {
                 throw new ArgumentNullException(nameof(version));
             }
@@ -412,12 +413,12 @@ namespace DTLS
 
         internal static byte[] GetEncryptedRsaPreMasterSecret(byte[] cert, byte[] premaster)
         {
-            if(cert == null)
+            if (cert == null)
             {
                 throw new ArgumentNullException(nameof(cert));
             }
 
-            if(premaster == null)
+            if (premaster == null)
             {
                 throw new ArgumentNullException(nameof(premaster));
             }
@@ -429,7 +430,7 @@ namespace DTLS
             var rsa = (RSACng)certificate.PublicKey.Key;
             return rsa.Encrypt(premaster, RSAEncryptionPadding.Pkcs1);
 #else
-            var rsa = (RSACryptoServiceProvider)certificate.PublicKey.Key;
+            var rsa = (RSACryptoServiceProvider)certificate.GetRSAPublicKey();
             return rsa.Encrypt(premaster, false);
 #endif
         }
