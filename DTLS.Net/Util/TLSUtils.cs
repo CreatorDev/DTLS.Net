@@ -370,7 +370,7 @@ namespace DTLS
                 var randomData = new byte[46];
                 random.GetBytes(randomData);
                 var versionBytes = new byte[] { (byte)(255 - version.Major), (byte)(255 - version.Minor) };
-                return versionBytes.Concat(randomData).ToArray();
+                return [.. versionBytes, .. randomData];
             }
         }
 
@@ -388,14 +388,8 @@ namespace DTLS
 
 
             var certificate = new X509Certificate2(cert);
-
-#if NETSTANDARD2_1 || NETSTANDARD2_0
-            var rsa = (RSACng)certificate.PublicKey.Key;
+            var rsa = certificate.GetRSAPublicKey();
             return rsa.Encrypt(premaster, RSAEncryptionPadding.Pkcs1);
-#else
-            var rsa = (RSACryptoServiceProvider)certificate.GetRSAPublicKey();
-            return rsa.Encrypt(premaster, false);
-#endif
         }
     }
 }
