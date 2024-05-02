@@ -89,13 +89,8 @@ namespace DTLS
         public List<TCipherSuite> SupportedCipherSuites { get; }
         public byte[] ServerCertificate { get; set; }
 
-#if NETSTANDARD2_1 || NETSTANDARD2_0
-        private CngKey _PrivateKeyRsa;
-        public CngKey PublicKey { get; set; }
-#else
-        private RSACryptoServiceProvider _PrivateKeyRsa;
-        public RSACryptoServiceProvider PublicKey { get; set; }
-#endif
+        private RSA _PrivateKeyRsa;
+        public RSA PublicKey { get; set; }
 
         public Client(EndPoint localEndPoint)
             : this(localEndPoint, [])
@@ -981,11 +976,11 @@ namespace DTLS
             var mainCert = chain.ChainElements[0].Certificate;
 
 #if NETSTANDARD2_1 || NETSTANDARD2_0
-            _PrivateKeyRsa = ((RSACng)mainCert.PrivateKey).Key;
-            PublicKey = ((RSACng)mainCert.PublicKey.Key).Key;
+            _PrivateKeyRsa = mainCert.GetRSAPrivateKey();
+            PublicKey = mainCert.GetRSAPublicKey();
 #else
-            _PrivateKeyRsa = (RSACryptoServiceProvider)mainCert.GetRSAPrivateKey();
-            PublicKey = (RSACryptoServiceProvider)mainCert.GetRSAPublicKey();
+            this._PrivateKeyRsa = mainCert.GetRSAPrivateKey();
+            this.PublicKey = mainCert.GetRSAPublicKey();
 #endif
 
             var certChain = new List<byte[]>();
