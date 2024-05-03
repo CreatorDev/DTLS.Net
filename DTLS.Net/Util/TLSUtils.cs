@@ -224,12 +224,17 @@ namespace DTLS
                 : TlsUtilities.PRF(context, master_secret, ExporterLabel.key_expansion, seed, size);
         }
 
-        public static byte[] Sign(AsymmetricKeyParameter privateKey, RSA rsa, bool client, Version version, HandshakeInfo handshakeInfo,
+#if NETSTANDARD2_1 || NETSTANDARD2_0
+        public static byte[] Sign(AsymmetricKeyParameter privateKey, CngKey rsaKey, bool client, Version version, HandshakeInfo handshakeInfo,
             SignatureHashAlgorithm signatureHashAlgorithm, byte[] hash)
+#else
+        public static byte[] Sign(AsymmetricKeyParameter privateKey, RSACryptoServiceProvider rsaKey, bool client, Version version, HandshakeInfo handshakeInfo,
+            SignatureHashAlgorithm signatureHashAlgorithm, byte[] hash)
+#endif
         {
-            if (privateKey == null && rsa == null)
+            if (privateKey == null && rsaKey == null)
             {
-                throw new ArgumentException("No key or RSA provided");
+                throw new ArgumentException("No key or Rsa CSP provided");
             }
 
             if (privateKey == null)
@@ -237,7 +242,7 @@ namespace DTLS
 
                 if (signatureHashAlgorithm.Signature == TSignatureAlgorithm.RSA)
                 {
-                    return SignRsa(rsa , hash);
+                    return SignRsa(rsaKey, hash);
                 }
 
                 throw new ArgumentException("Need private key for non-RSA Algorithms");
@@ -299,11 +304,28 @@ namespace DTLS
         }
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Interoperability", "CA1416:Validate platform compatibility", Justification = "Other methods are available but RSA is just for windows")]
-        public static byte[] SignRsa(RSA rsa, byte[] hash)
+#if NETSTANDARD2_1 || NETSTANDARD2_0
+        public static byte[] SignRsa(CngKey cngKey, byte[] hash)
         {
-            if (rsa == null)
+            if(cngKey == null)
             {
-                throw new ArgumentNullException(nameof(rsa));
+                throw new ArgumentNullException(nameof(cngKey));
+            }
+
+            if(hash == null)
+            {
+                throw new ArgumentNullException(nameof(hash));
+            }
+
+            var result = NCryptInterop.SignHashRaw(cngKey, hash, cngKey.KeySize);
+            return result;
+        }
+#else
+        public static byte[] SignRsa(RSACryptoServiceProvider rsaCsp, byte[] hash)
+        {
+            if (rsaCsp == null)
+            {
+                throw new ArgumentNullException(nameof(rsaCsp));
             }
 
             if (hash == null)
@@ -311,10 +333,22 @@ namespace DTLS
                 throw new ArgumentNullException(nameof(hash));
             }
 
-            RSAParameters rsaParams = rsa.ExportParameters(true);
-            CngKey cngKey = CngKey.Import(rsaParams.Modulus, CngKeyBlobFormat.GenericPublicBlob);
-            return NCryptInterop.SignHashRaw(cngKey, hash, rsa.KeySize);
+            var cspInfo = rsaCsp.CspKeyContainerInfo;
+            var provider = new CngProvider(cspInfo.ProviderName);
+            var options = CngKeyOpenOptions.None;
+
+            if (cspInfo.MachineKeyStore)
+            {
+                options = CngKeyOpenOptions.MachineKey;
+            }
+
+            using (var cngKey = CngKey.Open(cspInfo.KeyContainerName, provider, options))
+            {
+                var result = NCryptInterop.SignHashRaw(cngKey, hash, rsaCsp.KeySize);
+                return result;
+            }
         }
+#endif
 
         public static byte[] GetVerifyData(Version version, HandshakeInfo handshakeInfo, bool client, bool isClientFinished,
             byte[] handshakeHash)

@@ -89,8 +89,13 @@ namespace DTLS
         public List<TCipherSuite> SupportedCipherSuites { get; }
         public byte[] ServerCertificate { get; set; }
 
-        private RSA _PrivateKeyRsa;
-        public RSA PublicKey { get; set; }
+#if NETSTANDARD2_1 || NETSTANDARD2_0
+        private CngKey _PrivateKeyRsa;
+        public CngKey PublicKey { get; set; }
+#else
+        private RSACryptoServiceProvider _PrivateKeyRsa;
+        public RSACryptoServiceProvider PublicKey { get; set; }
+#endif
 
         public Client(EndPoint localEndPoint)
             : this(localEndPoint, [])
@@ -975,8 +980,17 @@ namespace DTLS
 
             var mainCert = chain.ChainElements[0].Certificate;
 
-            _PrivateKeyRsa = mainCert.GetRSAPrivateKey();
-            PublicKey = mainCert.GetRSAPublicKey();
+#if NETSTANDARD2_1 || NETSTANDARD2_0
+            _PrivateKeyRsa = ((RSACng)mainCert.PrivateKey).Key;
+            PublicKey = ((RSACng)mainCert.PublicKey.Key).Key;
+#else
+#pragma warning disable SYSLIB0028 // Type or member is obsolete - haven't been able to find a way without exporting the private key
+            _PrivateKeyRsa = (RSACryptoServiceProvider)mainCert.PrivateKey;
+#pragma warning restore SYSLIB0028 // Type or member is obsolete - haven't been able to find a way without exporting the private key
+#pragma warning disable SYSLIB0027 // Type or member is obsolete - haven't been able to find a way without exporting the private key
+            PublicKey = (RSACryptoServiceProvider)mainCert.PublicKey.Key;
+#pragma warning restore SYSLIB0027 // Type or member is obsolete - haven't been able to find a way without exporting the private key
+#endif
 
             var certChain = new List<byte[]>();
             foreach (var element in chain.ChainElements)
