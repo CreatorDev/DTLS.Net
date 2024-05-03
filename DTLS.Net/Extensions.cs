@@ -4,9 +4,6 @@ using System.Linq;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
-#if NET452 || NET47
-using System.Net;
-#endif
 
 namespace DTLS.Net
 {
@@ -15,7 +12,7 @@ namespace DTLS.Net
         public static async Task<int> SendAsync(this Socket socket, byte[] buffer, TimeSpan timeout)
         {
             var timeoutMs = (int)timeout.TotalMilliseconds;
-#if NETSTANDARD2_1
+#if NETSTANDARD2_1 || NET6_0_OR_GREATER
             using (var cts = new CancellationTokenSource())
             {
                 cts.CancelAfter(timeoutMs);
@@ -33,7 +30,7 @@ namespace DTLS.Net
         public static async Task<int> ReceiveAsync(this Socket socket, byte[] buffer, TimeSpan timeout)
         {
             var timeoutMs = (int)timeout.TotalMilliseconds;
-#if NETSTANDARD2_1
+#if NETSTANDARD2_1 || NET6_0_OR_GREATER
             using (var cts = new CancellationTokenSource())
             {
                 cts.CancelAfter(timeoutMs);
@@ -48,7 +45,7 @@ namespace DTLS.Net
 #endif
         }
 
-#if !NETSTANDARD2_1
+#if !NETSTANDARD2_1 && !NET6_0_OR_GREATER
         public static async Task<TResult> TimeoutAfterAsync<TResult>(this Task<TResult> task, int timeout)
         {
             using (var timeoutCancellationTokenSource = new CancellationTokenSource())

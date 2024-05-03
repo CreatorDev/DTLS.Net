@@ -30,9 +30,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
-#if !NET452 && !NET47
 using System.Runtime.InteropServices;
-#endif
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
@@ -89,8 +87,13 @@ namespace DTLS
         public List<TCipherSuite> SupportedCipherSuites { get; }
         public byte[] ServerCertificate { get; set; }
 
+#if NETSTANDARD2_1 || NET6_0_OR_GREATER
         private CngKey _PrivateKeyRsa;
         public CngKey PublicKey { get; set; }
+#else
+        private RSACryptoServiceProvider _PrivateKeyRsa;
+        public RSACryptoServiceProvider PublicKey { get; set; }
+#endif
 
         public Client(EndPoint localEndPoint)
             : this(localEndPoint, [])
@@ -563,11 +566,8 @@ namespace DTLS
             {
                 soc.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, true);
             }
-#if NET452 || NET47
-            if (Environment.OSVersion.Platform != PlatformID.Unix)
-#else
+
             if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-#endif
             {
                 // do not throw SocketError.ConnectionReset by ignoring ICMP Port Unreachable
                 const int SIO_UDP_CONNRESET = -1744830452;
@@ -976,12 +976,17 @@ namespace DTLS
 
             var mainCert = chain.ChainElements[0].Certificate;
 
+#if NETSTANDARD2_1 || NET6_0_OR_GREATER
 #pragma warning disable SYSLIB0028 // Type or member is obsolete
             _PrivateKeyRsa = ((RSACng)mainCert.PrivateKey).Key;
 #pragma warning restore SYSLIB0028 // Type or member is obsolete
 #pragma warning disable SYSLIB0027 // Type or member is obsolete
             PublicKey = ((RSACng)mainCert.PublicKey.Key).Key;
 #pragma warning restore SYSLIB0027 // Type or member is obsolete
+#else
+            _PrivateKeyRsa = (RSACryptoServiceProvider)mainCert.PrivateKey;
+            PublicKey = (RSACryptoServiceProvider)mainCert.PublicKey.Key;
+#endif
 
             var certChain = new List<byte[]>();
             foreach (var element in chain.ChainElements)
