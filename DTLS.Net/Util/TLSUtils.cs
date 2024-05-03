@@ -224,12 +224,12 @@ namespace DTLS
                 : TlsUtilities.PRF(context, master_secret, ExporterLabel.key_expansion, seed, size);
         }
 
-        public static byte[] Sign(AsymmetricKeyParameter privateKey, RSACng rsaCng, bool client, Version version, HandshakeInfo handshakeInfo,
+        public static byte[] Sign(AsymmetricKeyParameter privateKey, RSA rsa, bool client, Version version, HandshakeInfo handshakeInfo,
             SignatureHashAlgorithm signatureHashAlgorithm, byte[] hash)
         {
-            if (privateKey == null && rsaCng == null)
+            if (privateKey == null && rsa == null)
             {
-                throw new ArgumentException("No key or RSA CNG provided");
+                throw new ArgumentException("No key or RSA provided");
             }
 
             if (privateKey == null)
@@ -237,7 +237,7 @@ namespace DTLS
 
                 if (signatureHashAlgorithm.Signature == TSignatureAlgorithm.RSA)
                 {
-                    return SignRsa(rsaCng, hash);
+                    return SignRsa(rsa , hash);
                 }
 
                 throw new ArgumentException("Need private key for non-RSA Algorithms");
@@ -299,11 +299,11 @@ namespace DTLS
         }
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Interoperability", "CA1416:Validate platform compatibility", Justification = "Other methods are available but RSA is just for windows")]
-        public static byte[] SignRsa(RSACng rsacng, byte[] hash)
+        public static byte[] SignRsa(RSA rsa, byte[] hash)
         {
-            if (rsacng == null)
+            if (rsa == null)
             {
-                throw new ArgumentNullException(nameof(rsacng));
+                throw new ArgumentNullException(nameof(rsa));
             }
 
             if (hash == null)
@@ -311,9 +311,9 @@ namespace DTLS
                 throw new ArgumentNullException(nameof(hash));
             }
 
-            RSAParameters rsaParams = rsacng.ExportParameters(true);
+            RSAParameters rsaParams = rsa.ExportParameters(true);
             CngKey cngKey = CngKey.Import(rsaParams.Modulus, CngKeyBlobFormat.GenericPublicBlob);
-            return NCryptInterop.SignHashRaw(cngKey, hash, rsacng.KeySize);
+            return NCryptInterop.SignHashRaw(cngKey, hash, rsa.KeySize);
         }
 
         public static byte[] GetVerifyData(Version version, HandshakeInfo handshakeInfo, bool client, bool isClientFinished,
