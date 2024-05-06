@@ -87,8 +87,13 @@ namespace DTLS
         public List<TCipherSuite> SupportedCipherSuites { get; }
         public byte[] ServerCertificate { get; set; }
 
-        private RSA _PrivateKeyRsa;
-        public RSA PublicKey { get; set; }
+#if NETSTANDARD2_1 || NET6_0_OR_GREATER
+        private CngKey _PrivateKeyRsa;
+        public CngKey PublicKey { get; set; }
+#else
+        private RSACryptoServiceProvider _PrivateKeyRsa;
+        public RSACryptoServiceProvider PublicKey { get; set; }
+#endif
 
         public Client(EndPoint localEndPoint)
             : this(localEndPoint, [])
@@ -961,6 +966,7 @@ namespace DTLS
             }
         }
 
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Interoperability", "CA1416:Validate platform compatibility", Justification = "Other methods are available but RSA is just for windows")]
         public void LoadX509Certificate(X509Chain chain)
         {
             if (chain == null)
@@ -970,9 +976,17 @@ namespace DTLS
 
             var mainCert = chain.ChainElements[0].Certificate;
 
-
-            _PrivateKeyRsa = mainCert.GetRSAPrivateKey();
-            PublicKey = mainCert.GetRSAPublicKey();
+#if NETSTANDARD2_1 || NET6_0_OR_GREATER
+#pragma warning disable SYSLIB0028 // Type or member is obsolete
+            _PrivateKeyRsa = ((RSACng)mainCert.PrivateKey).Key;
+#pragma warning restore SYSLIB0028 // Type or member is obsolete
+#pragma warning disable SYSLIB0027 // Type or member is obsolete
+            PublicKey = ((RSACng)mainCert.PublicKey.Key).Key;
+#pragma warning restore SYSLIB0027 // Type or member is obsolete
+#else
+            _PrivateKeyRsa = (RSACryptoServiceProvider)mainCert.PrivateKey;
+            PublicKey = (RSACryptoServiceProvider)mainCert.PublicKey.Key;
+#endif
 
             var certChain = new List<byte[]>();
             foreach (var element in chain.ChainElements)
