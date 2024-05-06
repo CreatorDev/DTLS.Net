@@ -44,6 +44,7 @@ namespace DTLS
             public override byte[] MasterSecret => this._HandshakeInfo.MasterSecret;
             public override int PrfAlgorithm => this._PrfAlgorithm;
             public override byte[] ServerRandom => this._ServerRandom;
+            public override bool IsExtendedMasterSecret => this._HandshakeInfo.Extensions.Exists(e => e.ExtensionType == TExtensionType.ExtendedMasterSecret);
 
             public DTLSSecurityParameters(Version version, HandshakeInfo handshakeInfo)
 			{

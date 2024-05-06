@@ -34,6 +34,8 @@ namespace DTLS
 
         public TCipherSuite CipherSuite { get; set; }
 
+        public Extensions Extensions { get; set; }
+
         public RandomData ClientRandom { get; set; }
 
         public RandomData ServerRandom { get; set; }

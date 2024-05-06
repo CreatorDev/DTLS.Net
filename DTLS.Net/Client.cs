@@ -204,6 +204,7 @@ namespace DTLS
                             _HandshakeInfo.UpdateHandshakeHash(data);
                             _ServerEpoch = record.Epoch;
                             _HandshakeInfo.CipherSuite = (TCipherSuite)serverHello.CipherSuite;
+                            _HandshakeInfo.Extensions = serverHello.Extensions;
                             _HandshakeInfo.ServerRandom = serverHello.Random;
                             _Version = serverHello.ServerVersion <= _Version ? serverHello.ServerVersion : _SupportedVersion;
                             break;
