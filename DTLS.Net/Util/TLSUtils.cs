@@ -188,7 +188,10 @@ namespace DTLS
             TlsContext context = new DTLSContext(client, version, handshakeInfo);
             var securityParameters = context.SecurityParameters;
             var seed = securityParameters.ClientRandom.Concat(securityParameters.ServerRandom).ToArray();
-            var asciiLabel = ExporterLabel.master_secret;
+            var asciiLabel =
+                handshakeInfo.Extensions.Exists(e => e.ExtensionType == TExtensionType.ExtendedMasterSecret)
+                ? ExporterLabel.extended_master_secret
+                : ExporterLabel.master_secret;
 
             handshakeInfo.MasterSecret = TlsUtilities.IsTlsV11(context) ?
                 TlsUtilities.PRF_legacy(preMasterSecret, asciiLabel, seed, 48)
