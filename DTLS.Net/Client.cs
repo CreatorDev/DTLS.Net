@@ -307,6 +307,7 @@ namespace DTLS
                         {
                             _HandshakeInfo.UpdateHandshakeHash(data);
                             var keyExchangeAlgorithm = CipherSuites.GetKeyExchangeAlgorithm(_HandshakeInfo.CipherSuite);
+                            byte[] premasterSecret = [];
                             if (_Cipher == null)
                             {
                                 if (keyExchangeAlgorithm == TKeyExchangeAlgorithm.PSK)
@@ -316,16 +317,14 @@ namespace DTLS
                                     var otherSecret = new byte[_PSKIdentity.Key.Length];
                                     clientKeyExchange.PSKIdentity = _PSKIdentity.Identity;
                                     _ClientKeyExchange = clientKeyExchange;
-                                    var preMasterSecret = TLSUtils.GetPSKPreMasterSecret(otherSecret, _PSKIdentity.Key);
-                                    _Cipher = TLSUtils.AssignCipher(preMasterSecret, true, _Version, _HandshakeInfo);
+                                    premasterSecret = TLSUtils.GetPSKPreMasterSecret(otherSecret, _PSKIdentity.Key);
                                 }
                                 else if (keyExchangeAlgorithm == TKeyExchangeAlgorithm.RSA)
                                 {
                                     var clientKeyExchange = new RSAClientKeyExchange();
                                     _ClientKeyExchange = clientKeyExchange;
-                                    var PreMasterSecret = TLSUtils.GetRsaPreMasterSecret(_Version);
-                                    clientKeyExchange.PremasterSecret = TLSUtils.GetEncryptedRsaPreMasterSecret(ServerCertificate, PreMasterSecret);
-                                    _Cipher = TLSUtils.AssignCipher(PreMasterSecret, true, _Version, _HandshakeInfo);
+                                    premasterSecret = TLSUtils.GetRsaPreMasterSecret(_Version);
+                                    clientKeyExchange.PremasterSecret = TLSUtils.GetEncryptedRsaPreMasterSecret(ServerCertificate, premasterSecret);
                                 }
                                 else
                                 {
@@ -339,6 +338,7 @@ namespace DTLS
                             }
 
                             await SendHandshakeMessageAsync(_ClientKeyExchange, false).ConfigureAwait(false);
+                            _Cipher = TLSUtils.AssignCipher(premasterSecret, true, _Version, _HandshakeInfo);
 
                             if (_SendCertificate)
                             {

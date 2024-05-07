@@ -187,9 +187,13 @@ namespace DTLS
 
             TlsContext context = new DTLSContext(client, version, handshakeInfo);
             var securityParameters = context.SecurityParameters;
-            var seed = securityParameters.ClientRandom.Concat(securityParameters.ServerRandom).ToArray();
+            var isExtendedMasterSecret = handshakeInfo.Extensions.Exists(e => e.ExtensionType == TExtensionType.ExtendedMasterSecret);
+            var seed =
+                isExtendedMasterSecret
+                ? handshakeInfo.GetHash(version)
+                : [.. securityParameters.ClientRandom, .. securityParameters.ServerRandom];
             var asciiLabel =
-                handshakeInfo.Extensions.Exists(e => e.ExtensionType == TExtensionType.ExtendedMasterSecret)
+                isExtendedMasterSecret
                 ? ExporterLabel.extended_master_secret
                 : ExporterLabel.master_secret;
 
@@ -197,10 +201,13 @@ namespace DTLS
                 TlsUtilities.PRF_legacy(preMasterSecret, asciiLabel, seed, 48)
                 : TlsUtilities.PRF(context, preMasterSecret, asciiLabel, seed, 48);
 
-            seed = [.. securityParameters.ServerRandom, .. securityParameters.ClientRandom];
-            var key_block = TlsUtilities.IsTlsV11(context) ?
-                TlsUtilities.PRF_legacy(handshakeInfo.MasterSecret, ExporterLabel.key_expansion, seed, 96)
-                : TlsUtilities.PRF(context, handshakeInfo.MasterSecret, ExporterLabel.key_expansion, seed, 96);
+            //seed =
+            //    isExtendedMasterSecret
+            //    ? handshakeInfo.GetHash(version)
+            //    : [.. securityParameters.ServerRandom, .. securityParameters.ClientRandom];
+            //var key_block = TlsUtilities.IsTlsV11(context) ?
+            //    TlsUtilities.PRF_legacy(handshakeInfo.MasterSecret, ExporterLabel.key_expansion, seed, 96)
+            //    : TlsUtilities.PRF(context, handshakeInfo.MasterSecret, ExporterLabel.key_expansion, seed, 96);
 
             return _CipherFactory
                 .CreateCipher(context, GetEncryptionAlgorithm(handshakeInfo.CipherSuite), GetMACAlgorithm(handshakeInfo.CipherSuite));
