@@ -881,7 +881,7 @@ namespace DTLS
             clientHello.Extensions =
                 [
                     new Extension() { ExtensionType = TExtensionType.SessionTicketTLS },
-                    new Extension() { ExtensionType = TExtensionType.EncryptThenMAC },
+                    //new Extension() { ExtensionType = TExtensionType.EncryptThenMAC },
                     new Extension() { ExtensionType = TExtensionType.ExtendedMasterSecret },
                 ];
 
