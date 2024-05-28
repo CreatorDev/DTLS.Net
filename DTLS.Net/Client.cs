@@ -87,13 +87,8 @@ namespace DTLS
         public List<TCipherSuite> SupportedCipherSuites { get; }
         public byte[] ServerCertificate { get; set; }
 
-#if NETSTANDARD2_1 || NET6_0_OR_GREATER
         private CngKey _PrivateKeyRsa;
         public CngKey PublicKey { get; set; }
-#else
-        private RSACryptoServiceProvider _PrivateKeyRsa;
-        public RSACryptoServiceProvider PublicKey { get; set; }
-#endif
 
         public Client(EndPoint localEndPoint)
             : this(localEndPoint, [])
@@ -977,17 +972,14 @@ namespace DTLS
 
             var mainCert = chain.ChainElements[0].Certificate;
 
-#if NETSTANDARD2_1 || NET6_0_OR_GREATER
-#pragma warning disable SYSLIB0028 // Type or member is obsolete
-            _PrivateKeyRsa = ((RSACng)mainCert.PrivateKey).Key;
-#pragma warning restore SYSLIB0028 // Type or member is obsolete
-#pragma warning disable SYSLIB0027 // Type or member is obsolete
-            PublicKey = ((RSACng)mainCert.PublicKey.Key).Key;
-#pragma warning restore SYSLIB0027 // Type or member is obsolete
-#else
-            _PrivateKeyRsa = (RSACryptoServiceProvider)mainCert.PrivateKey;
-            PublicKey = (RSACryptoServiceProvider)mainCert.PublicKey.Key;
-#endif
+            var privateRsa = mainCert.GetRSAPrivateKey() ?? throw new Exception("Unable to get RSA Private Key");
+            var privateRsaCng = privateRsa as RSACng ?? throw new Exception("Private Key is not an RSACng");
+            _PrivateKeyRsa = privateRsaCng.Key;
+
+            var publicRsa = mainCert.GetRSAPublicKey() ?? throw new Exception("Unable to get RSA Public Key");
+            var publicRsaCng = new RSACng();
+            publicRsaCng.ImportParameters(publicRsa.ExportParameters(false));
+            PublicKey = publicRsaCng.Key;
 
             var certChain = new List<byte[]>();
             foreach (var element in chain.ChainElements)
