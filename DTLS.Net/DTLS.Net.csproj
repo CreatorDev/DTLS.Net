@@ -19,11 +19,9 @@
     <DelaySign>false</DelaySign>
     <AssemblyOriginatorKeyFile>DTLS.Net.snk</AssemblyOriginatorKeyFile>
     <AssemblyName>DTLS2.Net</AssemblyName>
-    <Version>1.1.4</Version>
+    <Version>1.1.5</Version>
     <PackageReleaseNotes>
-      Bug Fix - Disabled Encrypt then MAC extension since it wasn't actually supported
-      Bug Fix - Actually supporting the extended master secret extension
-      Updated with some new language features including AsyncDisposable
+      Bug Fix - .NET8 was getting an error when getting the public key when loading an RSA certifiticate. Updated to use the newer method
     </PackageReleaseNotes>
   </PropertyGroup>
 
