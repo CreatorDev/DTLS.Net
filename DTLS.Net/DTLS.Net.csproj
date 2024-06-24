@@ -1,0 +1,51 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8;net7;net6;netstandard2.1;netstandard2.0</TargetFrameworks>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <LangVersion>latest</LangVersion>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <PackageId>DTLS2.Net</PackageId>
+    <Authors>kdurkin77</Authors>
+    <Product>DTLS2.Net</Product>
+    <Description>Library for a DTLS Client and Server Implementation. Not all features are supported. This package was built on top of CreatorDev's DTLS.Net - https://github.com/CreatorDev/DTLS.Net</Description>
+    <PackageTags>DTLS, RSA, PSK, X509Certificate2</PackageTags>
+    <PackageProjectUrl>https://github.com/kdurkin77/DTLS2.Net</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/kdurkin77/DTLS2.Net</RepositoryUrl>
+    <RepositoryType>GitHub</RepositoryType>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <Title>DTLS2.Net</Title>
+    <SignAssembly>true</SignAssembly>
+    <DelaySign>false</DelaySign>
+    <AssemblyOriginatorKeyFile>DTLS.Net.snk</AssemblyOriginatorKeyFile>
+    <AssemblyName>DTLS2.Net</AssemblyName>
+    <Version>1.1.5</Version>
+    <PackageReleaseNotes>
+      Bug Fix - .NET8 was getting an error when getting the public key when loading an RSA certifiticate. Updated to use the newer method
+    </PackageReleaseNotes>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Folder Include="HandshakeMessages\KeyExchange\" />
+    <Folder Include="Records\" />
+    <Folder Include="PSK\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Portable.BouncyCastle" Version="1.9.0" />
+    <PackageReference Include="System.Security.Cryptography.Cng" Version="5.0.0" />
+  </ItemGroup>
+
+  <ItemGroup Condition=" '$(TargetFramework)' == 'netstandard2.0' ">
+    <PackageReference Include="System.Threading.Thread" Version="4.3.0" />
+    <PackageReference Include="System.Threading.ThreadPool" Version="4.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\LICENSE">
+      <Pack>True</Pack>
+      <PackagePath></PackagePath>
+    </None>
+  </ItemGroup>
+
+</Project>
